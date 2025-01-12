@@ -6,7 +6,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from lightgbm import LGBMClassifier
-from nsga2 import NSGA2  # Assuming NSGA-II is implemented or imported from a library
+from xgboost import XGBClassifier
+import geatpy as ea  # NSGA-II library for multi-objective optimization
 
 # Step 1: Load the dataset
 data = pd.read_excel('Final_Credit_Risk_Dataset.xlsx')
@@ -48,18 +49,21 @@ y_pred_three_way = [three_way_decision(p, alpha, beta) for p in probs]
 rf = RandomForestClassifier(random_state=42)
 gb = GradientBoostingClassifier(random_state=42)
 ada = AdaBoostClassifier(random_state=42)
+xgb = XGBClassifier(random_state=42)
 
 # Train first layer classifiers
 rf.fit(X_train, y_train)
 gb.fit(X_train, y_train)
 ada.fit(X_train, y_train)
+xgb.fit(X_train, y_train)
 
 # Meta-classifier (second layer)
 lr = LogisticRegression()
 meta_features = np.column_stack([
     rf.predict(X_test),
     gb.predict(X_test),
-    ada.predict(X_test)
+    ada.predict(X_test),
+    xgb.predict(X_test)
 ])
 
 lr.fit(meta_features, y_test)
@@ -77,13 +81,32 @@ print(f"Precision: {precision:.4f}")
 print(f"Recall: {recall:.4f}")
 print(f"F1-Score: {f1:.4f}")
 
-# Step 7: Optimize thresholds using NSGA-II (Pseudo-code)
-def objective_function(alpha, beta):
-    decision_cost = ...  # Calculate decision cost based on alpha and beta
-    boundary_size = alpha - beta
-    return decision_cost, boundary_size
+# Step 7: Optimize thresholds using NSGA-II
+class ThreeWayDecisionOptimization(ea.Problem):
+    def __init__(self):
+        name = 'ThreeWayDecisionOptimization'
+        M = 2  # Number of objectives
+        maxormins = [1, 1]  # Minimize both objectives
+        Dim = 2  # Number of decision variables (alpha, beta)
+        varTypes = [0, 0]  # Continuous variables
+        lb = [0.5, 0.1]
+        ub = [0.9, 0.5]
+        lbin = [1, 1]
+        ubin = [1, 1]
+        super().__init__(name, M, maxormins, Dim, varTypes, lb, ub, lbin, ubin)
 
-nsga2 = NSGA2(objective_function, bounds=[(0.5, 0.9), (0.1, 0.5)])
-optimal_thresholds = nsga2.run()
+    def aimFunc(self, pop):
+        Vars = pop.Phen  # Decision variables (alpha, beta)
+        alpha = Vars[:, [0]]
+        beta = Vars[:, [1]]
+        decision_costs = np.abs(alpha - beta)  # Simplified cost function
+        boundary_sizes = alpha - beta
+        pop.ObjV = np.hstack([decision_costs, boundary_sizes])
+
+# Run the optimization
+problem = ThreeWayDecisionOptimization()
+algorithm = ea.moea_NSGA2_templet(problem, ea.Population(Encoding='RI', NIND=100), MAXGEN=200, logTras=1)
+res = ea.optimize(algorithm, verbose=False)
+optimal_thresholds = res['Vars'][np.argmin(res['ObjV'][:, 0])]  # Get the best thresholds
 
 print("Optimal thresholds:", optimal_thresholds)
