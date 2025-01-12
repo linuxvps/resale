@@ -1,0 +1,5 @@
+# Ignore Python virtual env folder
+.venv/
+
+# Ignore JetBrains IDEA config folder
+.idea/
