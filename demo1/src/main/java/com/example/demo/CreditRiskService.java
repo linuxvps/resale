@@ -18,7 +18,6 @@ public class CreditRiskService {
     @Autowired
     private LendingClubRepository lendingClubRepository;
 
-    // تعریف نقشه برای ترجمه نام ستون‌ها به فارسی
     public static final Map<String, String> COLUMN_NAME_TRANSLATIONS = new HashMap<>();
     static {
         COLUMN_NAME_TRANSLATIONS.put("loan_amnt", "مبلغ وام");
@@ -36,23 +35,21 @@ public class CreditRiskService {
     public Map<String, Object> getColumnStatistics(String columnName, String condition) {
         List<Double> values = lendingClubRepository.findColumnByCondition(columnName, condition);
         Map<String, Object> stats = calculateStatistics(values);
-        stats.put("columnName",COLUMN_NAME_TRANSLATIONS.get(columnName));
-        System.out.println(stats);
+        stats.put("columnName", COLUMN_NAME_TRANSLATIONS.get(columnName));
         return stats;
     }
-
 
     public List<Map<String, Object>> calcStatForList() {
         List<Map<String, Object>> results = new ArrayList<>();
 
-        // خواندن ستون‌ها از نقشه ترجمه
         for (String columnName : COLUMN_NAME_TRANSLATIONS.keySet()) {
             Map<String, Object> stats = getColumnStatistics(columnName, "1=1");
-            stats.put("نام ستون", COLUMN_NAME_TRANSLATIONS.get(columnName)); // افزودن نام فارسی ستون
+            stats.put("نام ستون", COLUMN_NAME_TRANSLATIONS.get(columnName));
             results.add(stats);
         }
         return results;
     }
+
     public Map<String, Object> calculateStatistics(List<Double> data) {
         DescriptiveStatistics stats = new DescriptiveStatistics();
         for (Double value : data) {
@@ -61,34 +58,23 @@ public class CreditRiskService {
             }
         }
 
-        double max = stats.getMax();
-        double min = stats.getMin();
-        long count = stats.getN();
-        double mean = stats.getMean();
-        double stdDev = stats.getStandardDeviation();
-        double variance = stats.getVariance();
-        double skew = stats.getSkewness();
-        double kurt = stats.getKurtosis();
-
         Map<String, Object> result = new HashMap<>();
-        result.put("بیشینه", max);
-        result.put("کمینه", min);
-        result.put("تعداد مشاهده", count);
-        result.put("میانگین", mean);
-        result.put("انحراف معیار", stdDev);
-        result.put("واریانس", variance);
-        result.put("چولگی", skew);
-        result.put("کشیدگی", kurt);
+        result.put("بیشینه", stats.getMax());
+        result.put("کمینه", stats.getMin());
+        result.put("تعداد مشاهده", stats.getN());
+        result.put("میانگین", stats.getMean());
+        result.put("انحراف معیار", stats.getStandardDeviation());
+        result.put("واریانس", stats.getVariance());
+        result.put("چولگی", stats.getSkewness());
+        result.put("کشیدگی", stats.getKurtosis());
 
         return result;
-
     }
 
     public void createWordReport(List<Map<String, Object>> results, String fileName) {
         try (XWPFDocument document = new XWPFDocument(); FileOutputStream out = new FileOutputStream(fileName)) {
-            DecimalFormat df = new DecimalFormat("#0"); // حذف ویرگول از اعداد
+            DecimalFormat df = new DecimalFormat("#,##0.##"); // افزودن جداکننده هزارگان و حذف نمایش علمی
 
-            // عنوان گزارش
             XWPFParagraph title = document.createParagraph();
             title.setAlignment(ParagraphAlignment.CENTER);
             XWPFRun titleRun = title.createRun();
@@ -98,13 +84,11 @@ public class CreditRiskService {
             titleRun.setFontFamily("B Nazanin");
             titleRun.addBreak();
 
-            // ایجاد جدول
             XWPFTable table = document.createTable();
             table.setWidth("100%");
             table.setInsideHBorder(XWPFTable.XWPFBorderType.SINGLE, 2, 0, "000000");
             table.setInsideVBorder(XWPFTable.XWPFBorderType.SINGLE, 2, 0, "000000");
 
-            // ایجاد سطر عنوان‌ها
             XWPFTableRow headerRow = table.getRow(0);
             String[] headers = {"متغیر", "میانگین", "بیشینه", "کمینه", "تعداد مشاهده", "انحراف معیار", "واریانس", "چولگی", "کشیدگی"};
             for (int i = 0; i < headers.length; i++) {
@@ -115,7 +99,6 @@ public class CreditRiskService {
                 }
             }
 
-            // تنظیم استایل سطر عنوان
             for (XWPFTableCell cell : headerRow.getTableCells()) {
                 cell.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
                 XWPFParagraph para = cell.getParagraphs().get(0);
@@ -124,27 +107,23 @@ public class CreditRiskService {
                 run.setBold(true);
                 run.setFontSize(14);
                 run.setFontFamily("B Nazanin");
-
             }
 
-            // افزودن داده‌ها به جدول
             for (Map<String, Object> stats : results) {
                 XWPFTableRow row = table.createRow();
 
-                // استفاده از نام ستون فارسی
                 String columnName = stats.getOrDefault("نام ستون", "نامشخص").toString();
                 row.getCell(0).setText(columnName);
 
-                row.getCell(1).setText(stats.getOrDefault("تعداد مشاهده", "0").toString());
-                row.getCell(2).setText(df.format(Double.parseDouble(stats.getOrDefault("بیشینه", "0").toString())));
-                row.getCell(3).setText(df.format(Double.parseDouble(stats.getOrDefault("کمینه", "0").toString())));
-                row.getCell(4).setText(df.format(Double.parseDouble(stats.getOrDefault("میانگین", "0").toString())));
-                row.getCell(5).setText(df.format(Double.parseDouble(stats.getOrDefault("انحراف معیار", "0").toString())));
-                row.getCell(6).setText(df.format(Double.parseDouble(stats.getOrDefault("واریانس", "0").toString())));
-                row.getCell(7).setText(df.format(Double.parseDouble(stats.getOrDefault("چولگی", "0").toString())));
-                row.getCell(8).setText(df.format(Double.parseDouble(stats.getOrDefault("کشیدگی", "0").toString())));
+                row.getCell(1).setText(  formatIfLarge( df.format(stats.getOrDefault("میانگین", 0))));
+                row.getCell(2).setText(  formatIfLarge( df.format(stats.getOrDefault("بیشینه", 0))));
+                row.getCell(3).setText(  formatIfLarge( df.format(stats.getOrDefault("کمینه", 0))));
+                row.getCell(4).setText(  formatIfLarge( stats.getOrDefault("تعداد مشاهده", 0).toString()));
+                row.getCell(5).setText(  formatIfLarge( df.format(stats.getOrDefault("انحراف معیار", 0))));
+                row.getCell(6).setText(  formatIfLarge( df.format(stats.getOrDefault("واریانس", 0))));
+                row.getCell(7).setText(  formatIfLarge( df.format(stats.getOrDefault("چولگی", 0))));
+                row.getCell(8).setText(  formatIfLarge( df.format(stats.getOrDefault("کشیدگی", 0))));
 
-                // تنظیم چینش داده‌ها
                 for (XWPFTableCell cell : row.getTableCells()) {
                     cell.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
                     XWPFParagraph para = cell.getParagraphs().get(0);
@@ -152,16 +131,44 @@ public class CreditRiskService {
                     XWPFRun run = para.createRun();
                     run.setFontSize(12);
                     run.setFontFamily("B Nazanin");
-
                 }
             }
 
-            // ذخیره فایل
             document.write(out);
             System.out.println("✅ گزارش Word ایجاد شد: " + fileName);
 
         } catch (IOException e) {
             e.printStackTrace();
+        }
+
+
+    }
+
+    public static String formatIfLarge(String numberStr) {
+        final int MAX_DIGITS = 6; // حداکثر تعداد ارقام مجاز
+
+        try {
+            numberStr = numberStr.replace(",", "");
+
+            // تبدیل رشته به عدد اعشاری
+            double number = Double.parseDouble(numberStr);
+
+            // جدا کردن قسمت صحیح عدد
+            String integerPart = numberStr.contains(".") ? numberStr.substring(0, numberStr.indexOf(".")) : numberStr;
+
+            // حذف علامت منفی در صورت وجود
+            integerPart = integerPart.replace("-", "");
+
+            // بررسی تعداد ارقام قسمت صحیح
+            if (integerPart.length() > MAX_DIGITS) {
+                // فرمت علمی برای اعداد بزرگ
+                DecimalFormat scientificFormat = new DecimalFormat("0.##E0");
+                return scientificFormat.format(number);
+            } else {
+                return numberStr;
+            }
+        } catch (NumberFormatException e) {
+            return "Invalid number format";
         }
     }
 
