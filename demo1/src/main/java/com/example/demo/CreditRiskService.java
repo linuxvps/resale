@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.repository.LendingClubRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.poi.xwpf.usermodel.*;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Service
@@ -19,6 +21,7 @@ public class CreditRiskService {
     private LendingClubRepository lendingClubRepository;
 
     public static final Map<String, String> COLUMN_NAME_TRANSLATIONS = new HashMap<>();
+
     static {
         COLUMN_NAME_TRANSLATIONS.put("loan_amnt", "مبلغ وام");
         COLUMN_NAME_TRANSLATIONS.put("int_rate", "نرخ بهره");
@@ -115,14 +118,14 @@ public class CreditRiskService {
                 String columnName = stats.getOrDefault("نام ستون", "نامشخص").toString();
                 row.getCell(0).setText(columnName);
 
-                row.getCell(1).setText(  formatIfLarge( df.format(stats.getOrDefault("میانگین", 0))));
-                row.getCell(2).setText(  formatIfLarge( df.format(stats.getOrDefault("بیشینه", 0))));
-                row.getCell(3).setText(  formatIfLarge( df.format(stats.getOrDefault("کمینه", 0))));
-                row.getCell(4).setText(  formatIfLarge( stats.getOrDefault("تعداد مشاهده", 0).toString()));
-                row.getCell(5).setText(  formatIfLarge( df.format(stats.getOrDefault("انحراف معیار", 0))));
-                row.getCell(6).setText(  formatIfLarge( df.format(stats.getOrDefault("واریانس", 0))));
-                row.getCell(7).setText(  formatIfLarge( df.format(stats.getOrDefault("چولگی", 0))));
-                row.getCell(8).setText(  formatIfLarge( df.format(stats.getOrDefault("کشیدگی", 0))));
+                row.getCell(1).setText(formatIfLarge(df.format(stats.getOrDefault("میانگین", 0))));
+                row.getCell(2).setText(formatIfLarge(df.format(stats.getOrDefault("بیشینه", 0))));
+                row.getCell(3).setText(formatIfLarge(df.format(stats.getOrDefault("کمینه", 0))));
+                row.getCell(4).setText(formatIfLarge(stats.getOrDefault("تعداد مشاهده", 0).toString()));
+                row.getCell(5).setText(formatIfLarge(df.format(stats.getOrDefault("انحراف معیار", 0))));
+                row.getCell(6).setText(formatIfLarge(df.format(stats.getOrDefault("واریانس", 0))));
+                row.getCell(7).setText(formatIfLarge(df.format(stats.getOrDefault("چولگی", 0))));
+                row.getCell(8).setText(formatIfLarge(df.format(stats.getOrDefault("کشیدگی", 0))));
 
                 for (XWPFTableCell cell : row.getTableCells()) {
                     cell.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
@@ -172,5 +175,10 @@ public class CreditRiskService {
         }
     }
 
-
+    void calcAmarTosifiVaMoteghayerTahghigAndCreateReport() {
+        List<Map<String, Object>> maps = calcStatForList();
+        String time = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+        String fileName = "CreditRisk_Report_" + time + ".docx";
+        createWordReport(maps,fileName);
+    }
 }
