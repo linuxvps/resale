@@ -1,5 +1,6 @@
 package com.example.demo.repository;
 
+import com.example.demo.LendingClub;
 import com.example.demo.hambastegi.ColumnPair;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -57,5 +58,24 @@ public class LendingClubCustomRepositoryImpl implements LendingClubCustomReposit
     }
 
 
+
+    @Override
+    public List<Object[]> findRecordsWhereFieldIsNotNull(List<String> fieldNames) {
+        if (fieldNames == null || fieldNames.isEmpty()) {
+            throw new IllegalArgumentException("لیست فیلدها نباید خالی باشد.");
+        }
+
+
+        // ایجاد کوئری داینامیک
+        String selectedFields = "len_id , " + String.join(", ", fieldNames);
+        String whereClause = fieldNames.stream()
+                .map(field -> field + " IS NOT NULL")
+                .collect(Collectors.joining(" AND "));
+
+        String queryString = "SELECT " + selectedFields + " FROM loan WHERE " + whereClause;
+
+        Query query = entityManager.createNativeQuery(queryString);
+        return query.getResultList();
+    }
 
 }

@@ -174,4 +174,7 @@ public class LendingClub {
     private BigDecimal settlement_amount;
     private BigDecimal settlement_percentage;
     private Integer settlement_term;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted;
 }
