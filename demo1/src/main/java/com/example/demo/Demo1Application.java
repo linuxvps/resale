@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.hambastegi.DataDistributionAnalyzer;
 import com.example.demo.hambastegi.PearsonCorrelationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
@@ -21,6 +22,9 @@ public class Demo1Application implements CommandLineRunner {
     @Autowired
     private PearsonCorrelationService pearsonCorrelationService;
 
+    @Autowired
+    private DataDistributionAnalyzer dataDistributionAnalyzer;
+
 
     public static void main(String[] args) {
         SpringApplication.run(Demo1Application.class, args);
@@ -31,7 +35,11 @@ public class Demo1Application implements CommandLineRunner {
 
 //        creditRiskService.calcAmarTosifiVaMoteghayerTahghigAndCreateReport();
 
-        pearsonCorrelationService.calcAndCreateReportOfPearsonsCorrelation();
+//        pearsonCorrelationService.calcAndCreateReportOfPearsonsCorrelation();
+
+        Map<String, Object> analysisResult = dataDistributionAnalyzer.analyzeColumnDistribution("annual_inc");
+        analysisResult.forEach((key, value) -> System.out.println(key + ": " + value));
+
 
     }
 }
