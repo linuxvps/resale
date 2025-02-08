@@ -36,9 +36,7 @@ public class Demo1Application implements CommandLineRunner {
 
 //        pearsonCorrelationService.calcAndCreateReportOfPearsonsCorrelation();
 
-//        Map<String, Object> analysisResult = dataDistributionAnalyzer.analyzeColumnDistribution("annual_inc");
-//        analysisResult.forEach((key, value) -> System.out.println(key + ": " + value));
 
-        dataOutlierAnalyzer.analyzeAndSoftDeleteOutliers("loan_amnt");
+        dataOutlierAnalyzer.calcOutlierAnalyzer();
     }
 }
