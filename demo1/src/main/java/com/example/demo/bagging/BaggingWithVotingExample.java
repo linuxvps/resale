@@ -10,6 +10,7 @@ import weka.classifiers.functions.SMO;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.Instances;
+import weka.core.SelectedTag;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -19,24 +20,18 @@ import java.util.*;
 public class BaggingWithVotingExample {
 
     public static void main(String[] args) throws Exception {
-        // 1. خواندن دیتاست
         Instances data = loadDataset();
 
-        // 2. تقسیم داده‌ها به آموزش و تست
         Instances[] splitData = splitDataset(data, 0.7);
         Instances trainData = splitData[0];
         Instances testData = splitData[1];
 
-        // 3. دریافت مدل‌های پایه
         Classifier[] baseModels = getBaseModels();
 
-        // 4. ایجاد مدل Voting با مدل‌های پایه داده شده
         Vote votingModel = createVotingModel(baseModels);
 
-        // 5. ایجاد و آموزش مدل Bagging
         Bagging baggingModel = trainBaggingModel(votingModel, trainData);
 
-        // 6. ارزیابی و نمایش نتایج
         evaluateModel(baggingModel, trainData, testData);
 
     }
@@ -44,7 +39,9 @@ public class BaggingWithVotingExample {
     private static Vote createVotingModel(Classifier[] baseModels) {
         Vote votingModel = new Vote();
         votingModel.setClassifiers(baseModels);
-        votingModel.setCombinationRule(new weka.core.SelectedTag(Vote.MAJORITY_VOTING_RULE, Vote.TAGS_RULES));
+//        SelectedTag votingRule = new SelectedTag(Vote.MAJORITY_VOTING_RULE, Vote.TAGS_RULES);
+        SelectedTag votingRule = new SelectedTag(Vote.AVERAGE_RULE, Vote.TAGS_RULES);
+        votingModel.setCombinationRule(votingRule);
 
         return votingModel;
     }
