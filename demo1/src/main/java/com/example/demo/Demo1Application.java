@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.bagging.service.BaggingService;
 import com.example.demo.hambastegi.DataDistributionAnalyzer;
 import com.example.demo.hambastegi.OutlierAnalyzer;
 import com.example.demo.hambastegi.PearsonCorrelationService;
@@ -24,6 +25,9 @@ public class Demo1Application implements CommandLineRunner {
     @Autowired
     private OutlierAnalyzer dataOutlierAnalyzer;
 
+    @Autowired
+    private BaggingService baggingService;
+
 
     public static void main(String[] args) {
         SpringApplication.run(Demo1Application.class, args);
@@ -37,6 +41,8 @@ public class Demo1Application implements CommandLineRunner {
 //        pearsonCorrelationService.calcAndCreateReportOfPearsonsCorrelation();
 
 
-        dataOutlierAnalyzer.calcOutlierAnalyzer();
+//        dataOutlierAnalyzer.calcOutlierAnalyzer();
+        baggingService.calcBagging();
+
     }
 }

@@ -1,12 +1,16 @@
-package com.example.demo.bagging;
+package com.example.demo.bagging.service;
 
+import com.example.demo.bagging.BaggingWithVotingExample;
+import com.example.demo.repository.LendingClubRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
+import weka.classifiers.functions.Logistic;
+import weka.classifiers.functions.SMO;
 import weka.classifiers.meta.Bagging;
 import weka.classifiers.meta.Vote;
 import weka.classifiers.trees.J48;
-import weka.classifiers.functions.Logistic;
-import weka.classifiers.functions.SMO;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.Instances;
@@ -17,10 +21,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.*;
 
-public class BaggingWithVotingExample {
+@Service
+public class BaggingService {
+    @Autowired
+    private LendingClubRepository lendingClubRepository;
 
-    public static void main(String[] args) throws Exception {
-        Instances data = loadDataset();
+    public void calcBagging() throws Exception {
+        Instances data = lendingClubRepository.loadDatasetFromLoan();
+        data.setClassIndex(data.numAttributes() - 1);
 
         Instances[] splitData = splitDataset(data, 0.7);
         Instances trainData = splitData[0];
@@ -33,20 +41,19 @@ public class BaggingWithVotingExample {
         Bagging baggingModel = trainBaggingModel(votingModel, trainData);
 
         evaluateModel(baggingModel, trainData, testData);
-
     }
 
-    private static Vote createVotingModel(Classifier[] baseModels) {
+    private Vote createVotingModel(Classifier[] baseModels) {
         Vote votingModel = new Vote();
         votingModel.setClassifiers(baseModels);
-        SelectedTag votingRule = new SelectedTag(Vote.MAJORITY_VOTING_RULE, Vote.TAGS_RULES);
-//        SelectedTag votingRule = new SelectedTag(Vote.AVERAGE_RULE, Vote.TAGS_RULES);
+//        SelectedTag votingRule = new SelectedTag(Vote.MAJORITY_VOTING_RULE, Vote.TAGS_RULES);
+        SelectedTag votingRule = new SelectedTag(Vote.AVERAGE_RULE, Vote.TAGS_RULES);
         votingModel.setCombinationRule(votingRule);
 
         return votingModel;
     }
 
-    private static Classifier[] getBaseModels() throws Exception {
+    private Classifier[] getBaseModels() throws Exception {
         J48 decisionTree = new J48();
         decisionTree.setOptions(new String[]{"-M", "3"}); // حداکثر عمق 3
 
@@ -59,12 +66,12 @@ public class BaggingWithVotingExample {
     /**
      * متد برای خواندن دیتاست
      */
-    private static Instances loadDataset() {
+    private Instances loadDataset() {
         return loadIrisDataset();
     }
 
-    private static Instances loadIrisDataset() {
-        String fileName = "static/iris.data";
+    private Instances loadIrisDataset() {
+        String fileName = "/iris.data";
         List<double[]> features = new ArrayList<>();
         List<String> labels = new ArrayList<>();
         List<String> classNames = Arrays.asList("Iris-setosa", "Iris-versicolor", "Iris-virginica");
@@ -112,7 +119,7 @@ public class BaggingWithVotingExample {
     /**
      * متد برای تقسیم داده‌ها به آموزش و تست
      */
-    private static Instances[] splitDataset(Instances data, double trainRatio) {
+    private Instances[] splitDataset(Instances data, double trainRatio) {
         data.randomize(new Random(42));
         int trainSize = (int) Math.round(data.numInstances() * trainRatio);
         int testSize = data.numInstances() - trainSize;
@@ -127,7 +134,7 @@ public class BaggingWithVotingExample {
     /**
      * متد برای ایجاد و آموزش مدل Bagging
      */
-    private static Bagging trainBaggingModel(Vote votingModel, Instances trainData) throws Exception {
+    private Bagging trainBaggingModel(Vote votingModel, Instances trainData) throws Exception {
         Bagging baggingModel = new Bagging();
         baggingModel.setClassifier(votingModel);
         baggingModel.setNumIterations(10);
@@ -140,7 +147,7 @@ public class BaggingWithVotingExample {
     /**
      * متد برای ارزیابی مدل
      */
-    private static void evaluateModel(Classifier model, Instances trainData, Instances testData) throws Exception {
+    private void evaluateModel(Classifier model, Instances trainData, Instances testData) throws Exception {
         Evaluation eval = new Evaluation(trainData);
         eval.evaluateModel(model, testData);
 
@@ -152,4 +159,5 @@ public class BaggingWithVotingExample {
         System.out.println(eval.toClassDetailsString());
         System.out.println(eval.toMatrixString());
     }
+
 }
