@@ -2,24 +2,22 @@ package com.example.demo.bagging;
 
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
+import weka.classifiers.functions.Logistic;
+import weka.classifiers.functions.SMO;
 import weka.classifiers.meta.Bagging;
 import weka.classifiers.meta.Vote;
 import weka.classifiers.trees.J48;
-import weka.classifiers.functions.Logistic;
-import weka.classifiers.functions.SMO;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.Instances;
 import weka.core.SelectedTag;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class BaggingWithVotingExample {
+public class IRISBaggingWithVotingExample {
 
     public static void main(String[] args) throws Exception {
         Instances data = loadDataset();
@@ -72,7 +70,7 @@ public class BaggingWithVotingExample {
         List<String> classNames = Arrays.asList("Iris-setosa", "Iris-versicolor", "Iris-virginica");
 
         try (InputStream inputStream = Optional.ofNullable(
-                        BaggingWithVotingExample.class.getClassLoader().getResourceAsStream(fileName))
+                        IRISBaggingWithVotingExample.class.getClassLoader().getResourceAsStream(fileName))
                 .orElseThrow(() -> new IllegalArgumentException("فایل داده یافت نشد: " + fileName));
              BufferedReader br = new BufferedReader(new InputStreamReader(inputStream))) {
 

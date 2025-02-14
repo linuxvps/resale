@@ -120,24 +120,34 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
                                        final Instances dataset) {
 
         for (Object row : resultList) {
-            double[] values = new double[attributes.size()];
-
-            if (row instanceof Object[]) {
-                // حالت 1: اگر row از نوع آرایه باشد
-                Object[] rowArray = (Object[]) row;
-                for (int i = 0; i < rowArray.length; i++) {
-                    values[i] = convertValue(rowArray[i], attributes.get(i));
-                }
-            } else {
-                // حالت 2: اگر row یک شیء جاوا باشد (مثل ParsianLoan)
-                for (int i = 0; i < importantColumns.size(); i++) {
-                    Object fieldValue = getFieldValue(row, importantColumns.get(i));
-                    values[i] = convertValue(fieldValue, attributes.get(i));
-                }
-            }
+            double[] values = mapRowToValues(row, attributes, importantColumns);
             dataset.add(new DenseInstance(1.0, values));
         }
     }
+
+    private double[] mapRowToValues(final Object row,
+                                    final List<Attribute> attributes,
+                                    final List<String> importantColumns) {
+
+        double[] values = new double[attributes.size()];
+
+        if (row instanceof Object[]) {
+            // اگر row از دیتابیس در قالب آرایه Object[] آمده باشد
+            Object[] rowArray = (Object[]) row;
+            for (int i = 0; i < rowArray.length; i++) {
+                values[i] = convertValue(rowArray[i], attributes.get(i));
+            }
+        } else {
+            // اگر row یک شیء جاوا باشد و ستون‌ها را با Reflection بخوانیم
+            for (int i = 0; i < importantColumns.size(); i++) {
+                Object fieldValue = getFieldValue(row, importantColumns.get(i));
+                values[i] = convertValue(fieldValue, attributes.get(i));
+            }
+        }
+
+        return values;
+    }
+
 
     /**
      * متد تبدیل مقدار شیء دریافتی به مقدار عددی یا Nominal (در صورت نامعتبر بودن، مقدار missingValue ثبت می‌شود)

@@ -1,6 +1,5 @@
 package com.example.demo.bagging.service;
 
-import com.example.demo.bagging.BaggingWithVotingExample;
 import com.example.demo.repository.parsian.ParsianLoanRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -11,15 +10,10 @@ import weka.classifiers.functions.SMO;
 import weka.classifiers.meta.Bagging;
 import weka.classifiers.meta.Vote;
 import weka.classifiers.trees.J48;
-import weka.core.Attribute;
-import weka.core.DenseInstance;
 import weka.core.Instances;
 import weka.core.SelectedTag;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.*;
+import java.util.Random;
 
 @Service
 public class BaggingService {
@@ -28,6 +22,9 @@ public class BaggingService {
 
     public void calcBagging() throws Exception {
         Instances data = parsianLoanRepository.createInstance();
+// بررسی میانگین، انحراف معیار، حداقل و حداکثر مقادیر
+        System.out.println(data.toSummaryString());
+
 
         Instances[] splitData = splitDataset(data, 0.7);
         Instances trainData = splitData[0];
@@ -62,60 +59,6 @@ public class BaggingService {
 
         return new Classifier[]{decisionTree, svm, logistic};
     }
-
-    /**
-     * متد برای خواندن دیتاست
-     */
-    private Instances loadDataset() {
-        return loadIrisDataset();
-    }
-
-    private Instances loadIrisDataset() {
-        String fileName = "static/iris.data";
-        List<double[]> features = new ArrayList<>();
-        List<String> labels = new ArrayList<>();
-        List<String> classNames = Arrays.asList("Iris-setosa", "Iris-versicolor", "Iris-virginica");
-
-        try (InputStream inputStream = Optional.ofNullable(
-                        BaggingWithVotingExample.class.getClassLoader().getResourceAsStream(fileName))
-                .orElseThrow(() -> new IllegalArgumentException("فایل داده یافت نشد: " + fileName));
-             BufferedReader br = new BufferedReader(new InputStreamReader(inputStream))) {
-
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(",");
-                if (parts.length == 5) {
-                    features.add(Arrays.stream(parts, 0, 4).mapToDouble(Double::parseDouble).toArray());
-                    labels.add(parts[4]);
-                }
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("خطا در خواندن فایل داده", e);
-        }
-
-        // تعریف ویژگی‌ها
-        ArrayList<Attribute> attributes = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
-            attributes.add(new Attribute("feature" + (i + 1)));
-        }
-
-        // تعریف کلاس‌ها با استفاده از ArrayList
-        attributes.add(new Attribute("class", new ArrayList<>(classNames)));
-
-        // ایجاد مجموعه داده
-        Instances dataset = new Instances("IrisDataset", attributes, features.size());
-        dataset.setClassIndex(4);
-
-        // اضافه کردن داده‌ها
-        for (int i = 0; i < features.size(); i++) {
-            double[] instanceValues = Arrays.copyOf(features.get(i), 5);
-            instanceValues[4] = classNames.indexOf(labels.get(i));
-            dataset.add(new DenseInstance(1.0, instanceValues));
-        }
-
-        return dataset;
-    }
-
     /**
      * متد برای تقسیم داده‌ها به آموزش و تست
      */
