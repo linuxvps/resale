@@ -12,10 +12,9 @@ import weka.core.Instances;
 import weka.core.Utils;
 
 import java.lang.reflect.Field;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.antlr.v4.runtime.atn.EmptyPredictionContext.Instance;
 
 @Repository
 public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomRepository {
@@ -23,128 +22,130 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
     @PersistenceContext
     private EntityManager entityManager;
 
-
+    /**
+     * متد دریافت مقادیر متمایز یک ستون مشخص از جدول parsian_loan
+     * @param column نام ستونی که باید مقادیر یکتا از آن گرفته شود.
+     * @return لیستی از مقادیر متمایز
+     */
     @Override
-    public List<?> findDistinct(String column) {
-        String sql = "SELECT distinct " + column + " FROM parsian_loan ";
+    public List<?> findDistinct(final String column) {
+        final String sql = "SELECT DISTINCT " + column + " FROM parsian_loan";
         Query query = entityManager.createNativeQuery(sql);
-
-        // تبدیل لیست خروجی به List<Double>
-        List<?> resultList = query.getResultList();
-        return resultList;
+        return query.getResultList();
     }
 
+    /**
+     * متد ساخت دیتاست Instances برای عملیات یادگیری ماشین (استفاده در Weka)
+     * @return مجموعه Instances که حاوی رکوردها و ویژگی‌ها است.
+     */
     @SneakyThrows
     @Override
     public Instances createInstance() {
-        String nominalColumnName = "status";
+        final String nominalColumnName = "status";
         List<String> importantColumns = loadImportantColumns();
-        putNominalColumnNameAtTheEnd(importantColumns, nominalColumnName);
-        String loanSql = buildLoanSql(importantColumns);
-        List<?> resultList = getLoanData(loanSql);
-        List<Object> dynamicObjects = DynamicClassGenerator.generateDynamicObjects(importantColumns, resultList);
-        List<String> nominalStatus = getNominal(nominalColumnName);
+        moveNominalColumnToEnd(importantColumns, nominalColumnName);
 
-        ArrayList<Attribute> attributes = importantColumns.stream()
+        final String loanSql = buildLoanSql(importantColumns);
+        final List<?> resultList = getLoanData(loanSql);
+        final List<Object> dynamicObjects = DynamicClassGenerator.generateDynamicObjects(importantColumns, resultList);
+        final List<String> nominalStatus = loadNominalValues(nominalColumnName);
+
+        // ساخت فهرست Attributeها
+        ArrayList<Attribute> attributes = importantColumns
+                .stream()
                 .map(Attribute::new)
                 .collect(Collectors.toCollection(ArrayList::new));
+
+        // حذف ستون Nominal از وسط لیست و افزودن آن در انتهای Attributes
         attributes.removeIf(attr -> attr.name().equals(nominalColumnName));
         attributes.add(new Attribute(nominalColumnName, nominalStatus));
 
+        // ایجاد دیتاست و تنظیم اندیس کلاس (ستون هدف)
         Instances dataset = new Instances("LoanDataset", attributes, dynamicObjects.size());
         dataset.setClassIndex(attributes.size() - 1);
+
+        // افزودن رکوردها به دیتاست
         addInstancesToDataset(dynamicObjects, importantColumns, attributes, dataset);
+
         return dataset;
     }
 
-    private List<String> fillLabel(List<?> resultList) {
-        List<String> labels = new ArrayList<>();
-
-        for (Object result : resultList) {
-            Object[] row = (Object[]) result;
-            int lastIndex = row.length - 1;
-            labels.add(row[lastIndex].toString());
-        }
-
-        return labels;
-
-    }
-
-
-    private Map<String, List<?>> fillFeaturesAndLabel(List<?> resultList) {
-        List<double[]> features = new ArrayList<>();
-        List<String> labels = new ArrayList<>();
-
-        for (Object result : resultList) {
-            Object[] row = (Object[]) result;
-            int featureCount = row.length - 1;
-            double[] featureValues = new double[featureCount];
-            for (int i = 0; i < featureCount; i++) {
-                featureValues[i] = convertToDouble(row[i]);
-            }
-            features.add(featureValues);
-            labels.add(row[featureCount].toString());
-        }
-
-
-        Map<String, List<?>> output = new HashMap<>();
-        output.put("features", features);
-        output.put("labels", labels);
-        return output;
-    }
-
-
-    private void putNominalColumnNameAtTheEnd(List<String> importantColumns, String nominalColumnName) {
+    /**
+     * متد کمکی برای جابه‌جایی ستون Nominal به انتهای لیست
+     */
+    private void moveNominalColumnToEnd(final List<String> importantColumns, final String nominalColumnName) {
         importantColumns.remove(nominalColumnName);
         importantColumns.add(nominalColumnName);
     }
 
+    /**
+     * متد بارگذاری ستون‌های با اهمیت سطح ۴ از جدول مورد نظر
+     * @return لیستی از ستون‌های مهم
+     */
     private List<String> loadImportantColumns() {
-        String featureSql = "SELECT column_name FROM ln.loan_features WHERE importance_level = 4 AND table_name = 'parsian_loan' ";
-        @SuppressWarnings("unchecked") List<String> columns = entityManager.createNativeQuery(featureSql).getResultList();
+        final String featureSql =
+                "SELECT column_name FROM ln.loan_features WHERE importance_level = 4 AND table_name = 'parsian_loan'";
+        @SuppressWarnings("unchecked")
+        List<String> columns = entityManager.createNativeQuery(featureSql).getResultList();
         if (columns.isEmpty()) {
-            throw new RuntimeException("هیچ ستونی با اهمیت 4 برای جدول loan پیدا نشد.");
+            throw new RuntimeException("هیچ ستونی با اهمیت 4 برای جدول parsian_loan پیدا نشد.");
         }
         return columns;
     }
 
-    private String buildLoanSql(List<String> importantColumns) {
+    /**
+     * متد کمک‌کننده برای ساخت Query اصلی جهت دریافت داده‌های وام
+     */
+    private String buildLoanSql(final List<String> importantColumns) {
         String columns = String.join(", ", importantColumns);
         return "SELECT " + columns + " FROM ln.parsian_loan WHERE id < 100";
     }
 
+    /**
+     * اجرای Query و برگرداندن نتیجه خام
+     */
     @SuppressWarnings("unchecked")
-    private List<?> getLoanData(String loanSql) {
+    private List<?> getLoanData(final String loanSql) {
         Query loanQuery = entityManager.createNativeQuery(loanSql);
         return loanQuery.getResultList();
     }
 
-
-    public void addInstancesToDataset(List<?> resultList, List<String> importantColumns, ArrayList<Attribute> attributes, Instances dataset) {
+    /**
+     * افزودن رکوردهای موجود در resultList به دیتاست Weka
+     * @param resultList لیست اشیا (چه آرایه Object[] و چه اشیا داینامیک)
+     * @param importantColumns لیست ستون‌های مهم
+     * @param attributes لیست Attributeها
+     * @param dataset شیء Instances هدف برای درج داده
+     */
+    private void addInstancesToDataset(final List<?> resultList,
+                                       final List<String> importantColumns,
+                                       final ArrayList<Attribute> attributes,
+                                       final Instances dataset) {
 
         for (Object row : resultList) {
             double[] values = new double[attributes.size()];
 
             if (row instanceof Object[]) {
-                // حالت 1: اگر row از نوع Object[] باشد (یعنی از دیتابیس خوانده شده باشد)
+                // حالت 1: اگر row از نوع آرایه باشد
                 Object[] rowArray = (Object[]) row;
                 for (int i = 0; i < rowArray.length; i++) {
                     values[i] = convertValue(rowArray[i], attributes.get(i));
                 }
             } else {
-                // حالت 2: اگر row یک شیء جاوا باشد (مثلاً ParsianLoan)
+                // حالت 2: اگر row یک شیء جاوا باشد (مثل ParsianLoan)
                 for (int i = 0; i < importantColumns.size(); i++) {
                     Object fieldValue = getFieldValue(row, importantColumns.get(i));
                     values[i] = convertValue(fieldValue, attributes.get(i));
                 }
             }
-
             dataset.add(new DenseInstance(1.0, values));
         }
     }
 
-    // متد کمکی برای تبدیل مقدار به عدد یا مقدار Nominal
-    private double convertValue(Object value, Attribute attribute) {
+    /**
+     * متد تبدیل مقدار شیء دریافتی به مقدار عددی یا Nominal (در صورت نامعتبر بودن، مقدار missingValue ثبت می‌شود)
+     */
+    private double convertValue(final Object value, final Attribute attribute) {
         if (value == null) {
             return Utils.missingValue();
         }
@@ -155,8 +156,10 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
         }
     }
 
-    // متد کمکی برای تبدیل Object به Double (پشتیبانی از انواع مختلف عددی)
-    private double convertToDouble(Object value) {
+    /**
+     * متد کمک‌کننده برای تبدیل مقدار Object به double
+     */
+    private double convertToDouble(final Object value) {
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
         }
@@ -167,33 +170,26 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
         }
     }
 
-    // متد کمکی برای دریافت مقدار فیلد از یک شیء جاوا با استفاده از Reflection
-    private Object getFieldValue(Object obj, String fieldName) {
+    /**
+     * متد Reflection برای گرفتن مقدار فیلد به شکل دینامیک از یک شیء
+     */
+    private Object getFieldValue(final Object obj, final String fieldName) {
         try {
             Field field = obj.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
             return field.get(obj);
         } catch (NoSuchFieldException | IllegalAccessException e) {
-            return null; // مقدار نامعتبر
+            return null;
         }
     }
-    // متد برای دریافت مقدارهای منحصربه‌فرد loan_status
 
-    private List<String> getUniqueLoanStatusValues(List<?> resultList, int loanStatusIndex) {
-        Set<String> uniqueValues = new HashSet<>();
-        for (Object row : resultList) {
-            Object[] rowArray = (Object[]) row;
-            uniqueValues.add(String.valueOf(rowArray[loanStatusIndex]));
-        }
-        return new ArrayList<>(uniqueValues);
+    /**
+     * دریافت لیستی از مقادیر یکتای ستون Nominal به صورت رشته
+     */
+    private ArrayList<String> loadNominalValues(final String nominalColumnName) {
+        return findDistinct(nominalColumnName)
+                .stream()
+                .map(Object::toString)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
-
-
-    private ArrayList<String> getNominal(String nominalColumnName) {
-        // دریافت مقادیر متمایز از دیتابیس و تبدیل به لیستی از Attribute با استفاده از استریم
-        ArrayList<String> collect = findDistinct(nominalColumnName).stream().map(Object::toString).collect(Collectors.toCollection(ArrayList::new));
-        return collect;
-    }
-
-
 }
