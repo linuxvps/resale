@@ -1,6 +1,6 @@
 package com.example.demo.hambastegi;
 
-import com.example.demo.repository.LendingClubRepository;
+import com.example.demo.repository.lendingclub.LendingClubRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 import org.apache.poi.xwpf.usermodel.*;

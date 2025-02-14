@@ -1,6 +1,6 @@
 package com.example.demo;
 
-import com.example.demo.repository.LendingClubRepository;
+import com.example.demo.repository.lendingclub.LendingClubRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.poi.xwpf.usermodel.*;

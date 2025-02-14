@@ -1,6 +1,5 @@
-package com.example.demo.repository;
+package com.example.demo.repository.lendingclub;
 
-import com.example.demo.LendingClub;
 import com.example.demo.hambastegi.ColumnPair;
 import weka.core.Instances;
 
@@ -13,6 +12,7 @@ public interface LendingClubCustomRepository {
 
 
     List<Object[]> findRecordsWhereFieldIsNotNull(List<String> fieldNames);
+
     Instances loadDatasetFromLoan();
 
 

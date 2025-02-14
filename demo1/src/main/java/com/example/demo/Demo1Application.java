@@ -4,6 +4,7 @@ import com.example.demo.bagging.service.BaggingService;
 import com.example.demo.hambastegi.DataDistributionAnalyzer;
 import com.example.demo.hambastegi.OutlierAnalyzer;
 import com.example.demo.hambastegi.PearsonCorrelationService;
+import com.example.demo.savecsv.ParsianLoanService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -28,6 +29,9 @@ public class Demo1Application implements CommandLineRunner {
     @Autowired
     private BaggingService baggingService;
 
+    @Autowired
+    private ParsianLoanService parsianLoanService;
+
 
     public static void main(String[] args) {
         SpringApplication.run(Demo1Application.class, args);
@@ -43,6 +47,9 @@ public class Demo1Application implements CommandLineRunner {
 
 //        dataOutlierAnalyzer.calcOutlierAnalyzer();
         baggingService.calcBagging();
+
+//        parsianLoanService.processCsvFiles("C:\\Users\\nima\\Desktop\\lendingClub\\parianLoan");
+
 
     }
 }

@@ -1,6 +1,6 @@
-package com.example.demo.repository;
+package com.example.demo.repository.lendingclub;
 
-import com.example.demo.LendingClub;
+import com.example.demo.entity.LendingClub;
 import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

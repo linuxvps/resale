@@ -1,6 +1,6 @@
 package com.example.demo.hambastegi;
 
-import com.example.demo.repository.LendingClubRepository;
+import com.example.demo.repository.lendingclub.LendingClubRepository;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtils;

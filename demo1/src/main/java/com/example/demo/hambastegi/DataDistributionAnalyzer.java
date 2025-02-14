@@ -1,13 +1,12 @@
 package com.example.demo.hambastegi;
 
 
-import com.example.demo.repository.LendingClubRepository;
+import com.example.demo.repository.lendingclub.LendingClubRepository;
 import org.apache.commons.math3.stat.StatUtils;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.commons.math3.stat.descriptive.moment.Kurtosis;
 import org.apache.commons.math3.stat.descriptive.moment.Skewness;
 import org.apache.commons.math3.stat.inference.KolmogorovSmirnovTest;
-import org.apache.commons.math3.stat.inference.TestUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

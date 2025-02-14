@@ -1,10 +1,10 @@
-package com.example.demo;
+package com.example.demo.savecsv;
 
+import com.example.demo.entity.ParsianLoan;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -17,27 +17,26 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.time.YearMonth;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Stream;
 
 @Service
-public class LendingClubService {
+public class ParsianLoanService {
 
     @PersistenceContext
     private EntityManager entityManager;
 
     @Autowired
-    private entityManagerTrx entityManagerTrx;
+    private com.example.demo.savecsv.savetrx.entityManagerTrx entityManagerTrx;
 
-    private static final int EXPECTED_COLUMNS = 151;
-    private static final int BATCH_SIZE = 5000;  // هر 5000 رکورد یکبار ذخیره شود
+    private static final int EXPECTED_COLUMNS = 51;  // تعداد ستون‌های جدول
+    private static final int BATCH_SIZE = 1000;  // هر 1000 رکورد یکبار ذخیره شود
 
     public void processCsvFiles(String folderPath) {
         try (Stream<Path> paths = Files.list(Paths.get(folderPath))) {
-            paths.parallel() // 🚀 پردازش همزمان چندین فایل
+            paths.parallel()
                     .filter(Files::isRegularFile)
                     .filter(path -> path.toString().endsWith(".csv"))
                     .forEach(this::processCsvFile);
@@ -51,11 +50,11 @@ public class LendingClubService {
              CSVReader csvReader = new CSVReader(br)) {
 
             String[] header = csvReader.readNext(); // خواندن هدر
-            List<LendingClub> batch = new ArrayList<>();
+            List<ParsianLoan> batch = new ArrayList<>();
 
             String[] line;
             while ((line = csvReader.readNext()) != null) {
-                LendingClub entity = mapToEntity(normalizeColumns(line, EXPECTED_COLUMNS));
+                ParsianLoan entity = mapToEntity(normalizeColumns(line, EXPECTED_COLUMNS));
                 batch.add(entity);
 
                 if (batch.size() >= BATCH_SIZE) {
@@ -75,14 +74,14 @@ public class LendingClubService {
         }
     }
 
-    public void saveBatch(List<LendingClub> batch) {
-        entityManagerTrx.saveBatch(batch);
+    public void saveBatch(List<ParsianLoan> batch) {
+        entityManagerTrx.saveBatchParsian(batch);
     }
 
-    private LendingClub mapToEntity(String[] columns) {
-        LendingClub entity = new LendingClub();
-        Field[] fields = Arrays.stream(LendingClub.class.getDeclaredFields())
-                .filter(field -> !field.getName().equals("lenId")) // حذف lenId
+    private ParsianLoan mapToEntity(String[] columns) {
+        ParsianLoan entity = new ParsianLoan();
+        Field[] fields = Arrays.stream(ParsianLoan.class.getDeclaredFields())
+                .filter(field -> !field.getName().equals("id")) // حذف id که Auto Increment است
                 .toArray(Field[]::new);
 
         for (int i = 0; i < fields.length && i < columns.length; i++) {
@@ -92,8 +91,10 @@ public class LendingClubService {
                     case "Integer" -> parseInt(columns[i]);
                     case "Long" -> parseLong(columns[i]);
                     case "BigDecimal" -> parseBigDecimal(columns[i]);
-                    case "LocalDate" -> parseMonthYearToDate(columns[i]);
+                    case "LocalDate" -> parseLocalDate(columns[i]);
+                    case "LocalDateTime" -> parseLocalDateTime(columns[i]);
                     case "Character" -> parseCharacter(columns[i]);
+                    case "Float" -> parseFloat(columns[i]);
                     default -> cleanString(columns[i]);
                 };
                 fields[i].set(entity, newValue);
@@ -103,6 +104,15 @@ public class LendingClubService {
         }
         return entity;
     }
+    private Float parseFloat(String value) {
+        if (value == null || value.trim().isEmpty()) return null;
+        try {
+            return Float.parseFloat(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
 
     private static Character parseCharacter(String value) {
         return (value == null || value.trim().isEmpty()) ? null : value.trim().charAt(0);
@@ -113,11 +123,7 @@ public class LendingClubService {
         try {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
-            try {
-                return (int) Double.parseDouble(value.trim());
-            } catch (NumberFormatException ex) {
-                return null;
-            }
+            return null;
         }
     }
 
@@ -139,12 +145,20 @@ public class LendingClubService {
         }
     }
 
-    private LocalDate parseMonthYearToDate(String dateStr) {
-        if (dateStr == null || dateStr.trim().isEmpty()) return null;
+    private LocalDate parseLocalDate(String value) {
+        if (value == null || value.trim().isEmpty()) return null;
         try {
-            return YearMonth.parse(dateStr.trim(), DateTimeFormatter.ofPattern("MMM-yyyy", Locale.ENGLISH))
-                    .atDay(1);
-        } catch (DateTimeParseException e) {
+            return LocalDate.parse(value.trim(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseLocalDateTime(String value) {
+        if (value == null || value.trim().isEmpty()) return null;
+        try {
+            return LocalDateTime.parse(value.trim(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception e) {
             return null;
         }
     }

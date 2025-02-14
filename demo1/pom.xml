@@ -97,7 +97,11 @@
             <artifactId>weka-stable</artifactId>
             <version>3.8.6</version>
         </dependency>
-
+        <dependency>
+            <groupId>org.javassist</groupId>
+            <artifactId>javassist</artifactId>
+            <version>3.29.2-GA</version> <!-- بررسی کنید که آخرین نسخه باشه -->
+        </dependency>
     </dependencies>
 
     <build>

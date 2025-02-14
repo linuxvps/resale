@@ -1,6 +1,5 @@
-package com.example.demo.repository;
+package com.example.demo.repository.lendingclub;
 
-import com.example.demo.LendingClub;
 import com.example.demo.hambastegi.ColumnPair;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;

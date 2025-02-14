@@ -1,7 +1,9 @@
 package com.example.demo.bagging.service;
 
 import com.example.demo.bagging.BaggingWithVotingExample;
-import com.example.demo.repository.LendingClubRepository;
+import com.example.demo.entity.DynamicClassGenerator;
+import com.example.demo.repository.lendingclub.LendingClubRepository;
+import com.example.demo.repository.parsian.ParsianLoanRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import weka.classifiers.Classifier;
@@ -19,16 +21,17 @@ import weka.core.SelectedTag;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
 import java.util.*;
 
 @Service
 public class BaggingService {
     @Autowired
-    private LendingClubRepository lendingClubRepository;
+    private ParsianLoanRepository parsianLoanRepository;
 
     public void calcBagging() throws Exception {
-        Instances data = lendingClubRepository.loadDatasetFromLoan();
-        data.setClassIndex(data.numAttributes() - 1);
+        Instances data = parsianLoanRepository.createInstance();
+//        data.setClassIndex(data.numAttributes() - 1);
 
         Instances[] splitData = splitDataset(data, 0.7);
         Instances trainData = splitData[0];
@@ -41,6 +44,7 @@ public class BaggingService {
         Bagging baggingModel = trainBaggingModel(votingModel, trainData);
 
         evaluateModel(baggingModel, trainData, testData);
+
     }
 
     private Vote createVotingModel(Classifier[] baseModels) {
@@ -71,7 +75,7 @@ public class BaggingService {
     }
 
     private Instances loadIrisDataset() {
-        String fileName = "/iris.data";
+        String fileName = "static/iris.data";
         List<double[]> features = new ArrayList<>();
         List<String> labels = new ArrayList<>();
         List<String> classNames = Arrays.asList("Iris-setosa", "Iris-versicolor", "Iris-virginica");
