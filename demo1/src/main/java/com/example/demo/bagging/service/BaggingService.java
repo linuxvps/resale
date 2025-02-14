@@ -10,9 +10,15 @@ import weka.classifiers.functions.SMO;
 import weka.classifiers.meta.Bagging;
 import weka.classifiers.meta.Vote;
 import weka.classifiers.trees.J48;
+import weka.core.AttributeStats;
+import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.SelectedTag;
+import weka.filters.unsupervised.attribute.Standardize;
+import weka.filters.Filter;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 @Service
@@ -22,8 +28,14 @@ public class BaggingService {
 
     public void calcBagging() throws Exception {
         Instances data = parsianLoanRepository.createInstance();
-// بررسی میانگین، انحراف معیار، حداقل و حداکثر مقادیر
+
         System.out.println(data.toSummaryString());
+
+        analyzeStatistics(data);
+
+        removeUninformativeAttributes(data);
+        data = preprocessData(data);
+        checkClassBalance(data);
 
 
         Instances[] splitData = splitDataset(data, 0.7);
@@ -39,6 +51,65 @@ public class BaggingService {
         evaluateModel(baggingModel, trainData, testData);
 
     }
+
+    private void checkClassBalance(Instances data) {
+        int classIndex = data.classIndex();
+        Map<Double, Integer> classCounts = new HashMap<>();
+
+        for (Instance instance : data) {
+            double classValue = instance.classValue();
+            classCounts.put(classValue, classCounts.getOrDefault(classValue, 0) + 1);
+        }
+
+        System.out.println("\n=== Class Balance ===");
+        for (Map.Entry<Double, Integer> entry : classCounts.entrySet()) {
+            System.out.printf("Class: %.0f | Count: %d\n", entry.getKey(), entry.getValue());
+        }
+        System.out.println("sss");
+    }
+
+
+    private Instances removeUninformativeAttributes(Instances data) {
+        for (int i = data.numAttributes() - 1; i >= 0; i--) {
+            AttributeStats stats = data.attributeStats(i);
+            if (stats.distinctCount == 1) { // اگر فقط یک مقدار یکتا دارد، حذف کن
+                System.out.println("Removing uninformative attribute: " + data.attribute(i).name());
+                data.deleteAttributeAt(i);
+            }
+        }
+        return data;
+    }
+
+    private Instances preprocessData(Instances data) throws Exception {
+        Standardize standardize = new Standardize();
+        standardize.setInputFormat(data);
+        data = Filter.useFilter(data, standardize);
+        return data;
+    }
+
+
+    private void analyzeStatistics(Instances data) {
+        System.out.println("\n=== Descriptive Statistics ===");
+        for (int i = 0; i < data.numAttributes(); i++) {
+            if (data.attribute(i).isNumeric()) {
+                AttributeStats stats = data.attributeStats(i);
+                double mean = data.meanOrMode(i);
+                double stdDev = stats.numericStats.stdDev;
+                double variance = Math.pow(stdDev, 2);
+                double min = stats.numericStats.min;
+                double max = stats.numericStats.max;
+                double range = max - min;  // محاسبه دامنه
+                int count = stats.totalCount;
+                int missingValues = stats.missingCount;  // تعداد مقادیر گمشده
+                int distinctValues = stats.distinctCount;  // تعداد مقادیر یکتا
+
+                System.out.printf("Variable: %s | Count: %d | Mean: %.2f | StdDev: %.2f | Variance: %.2f | Min: %.2f | Max: %.2f | Range: %.2f | Missing Values: %d | Distinct Values: %d %n%s%n",
+                        data.attribute(i).name(), count, mean, stdDev, variance, min, max, range, missingValues, distinctValues, "-----------------");
+
+            }
+        }
+    }
+
 
     private Vote createVotingModel(Classifier[] baseModels) {
         Vote votingModel = new Vote();
@@ -59,6 +130,7 @@ public class BaggingService {
 
         return new Classifier[]{decisionTree, svm, logistic};
     }
+
     /**
      * متد برای تقسیم داده‌ها به آموزش و تست
      */
