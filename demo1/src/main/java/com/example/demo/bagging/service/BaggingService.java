@@ -35,6 +35,10 @@ public class BaggingService {
         // // حذف داده‌های پرت بر اساس IQR
         data = removeOutliersUsingIQR(data);
 
+
+        // استانداردسازی داده‌ها ----- بهتر نشد وقتی گذاشتمیش
+        data = preprocessData(data);
+
         Instances[] splitData = splitDataset(data, 0.7);
         Instances trainData = splitData[0];
         Instances testData = splitData[1];
