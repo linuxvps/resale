@@ -1,8 +1,6 @@
 package com.example.demo.bagging.service;
 
 import com.example.demo.bagging.BaggingWithVotingExample;
-import com.example.demo.entity.DynamicClassGenerator;
-import com.example.demo.repository.lendingclub.LendingClubRepository;
 import com.example.demo.repository.parsian.ParsianLoanRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,7 +19,6 @@ import weka.core.SelectedTag;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Method;
 import java.util.*;
 
 @Service
@@ -31,7 +28,6 @@ public class BaggingService {
 
     public void calcBagging() throws Exception {
         Instances data = parsianLoanRepository.createInstance();
-//        data.setClassIndex(data.numAttributes() - 1);
 
         Instances[] splitData = splitDataset(data, 0.7);
         Instances trainData = splitData[0];

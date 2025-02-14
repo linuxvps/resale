@@ -45,20 +45,17 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
         List<String> importantColumns = loadImportantColumns();
         moveNominalColumnToEnd(importantColumns, nominalColumnName);
 
+        ArrayList<Attribute> attributes = importantColumns.stream()
+                .filter(column -> !column.equals(nominalColumnName))
+                .map(Attribute::new)
+                .collect(Collectors.toCollection(ArrayList::new));
+        final List<String> nominalStatus = loadNominalValues(nominalColumnName);
+        attributes.add(new Attribute(nominalColumnName, nominalStatus));
+
+
         final String loanSql = buildLoanSql(importantColumns);
         final List<?> resultList = getLoanData(loanSql);
         final List<Object> dynamicObjects = DynamicClassGenerator.generateDynamicObjects(importantColumns, resultList);
-        final List<String> nominalStatus = loadNominalValues(nominalColumnName);
-
-        // ساخت فهرست Attributeها
-        ArrayList<Attribute> attributes = importantColumns
-                .stream()
-                .map(Attribute::new)
-                .collect(Collectors.toCollection(ArrayList::new));
-
-        // حذف ستون Nominal از وسط لیست و افزودن آن در انتهای Attributes
-        attributes.removeIf(attr -> attr.name().equals(nominalColumnName));
-        attributes.add(new Attribute(nominalColumnName, nominalStatus));
 
         // ایجاد دیتاست و تنظیم اندیس کلاس (ستون هدف)
         Instances dataset = new Instances("LoanDataset", attributes, dynamicObjects.size());
