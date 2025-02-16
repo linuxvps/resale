@@ -1,6 +1,7 @@
 package com.example.demo.bagging.service;
 
 import com.example.demo.repository.parsian.ParsianLoanRepository;
+import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,15 +20,14 @@ import weka.core.SelectedTag;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.Standardize;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.text.DecimalFormat;
+import java.util.*;
 
 @Service
 public class BaggingService {
 
     private static final Logger logger = LoggerFactory.getLogger(BaggingService.class);
+    private static final DecimalFormat df = new DecimalFormat("0.00");
 
     @Autowired
     private ParsianLoanRepository parsianLoanRepository;
@@ -57,8 +57,62 @@ public class BaggingService {
 
     private Instances prepareData(Instances data) throws Exception {
         data = statisticalDataAnalysis(data);
+        data = removeHighlyCorrelatedFeatures(data, 0.95);
         data = manageOutliers(data);
         return data;
+    }
+
+    private Instances removeHighlyCorrelatedFeatures(Instances data, double threshold) {
+        // ساخت یک کپی از داده‌های ورودی
+        Instances newData = new Instances(data);
+        int numAttributes = newData.numAttributes();
+        int classIndex = newData.classIndex();
+        Set<Integer> attributesToRemove = new HashSet<>();
+
+        // بررسی تمامی جفت ویژگی‌های عددی
+        for (int i = 0; i < numAttributes - 1; i++) {
+            for (int j = i + 1; j < numAttributes; j++) {
+                if (newData.attribute(i).isNumeric() && newData.attribute(j).isNumeric()) {
+                    double correlation = calculatePearsonCorrelation(newData, i, j);
+                    if (Math.abs(correlation) > threshold) {
+                        // اطمینان از عدم حذف ویژگی کلاس
+                        if (j != classIndex) {
+                            logger.info("🔴 همبستگی بالا بین: {} و {} | مقدار: {} | حذف: {}",
+                                    newData.attribute(i).name(),
+                                    newData.attribute(j).name(),
+                                    df.format(correlation),
+                                    newData.attribute(j).name());
+                            attributesToRemove.add(j);
+                        }
+                    }
+                }
+            }
+        }
+
+        // حذف ویژگی‌ها به ترتیب نزولی برای جلوگیری از تغییر ایندکس‌ها
+        List<Integer> sortedAttributes = new ArrayList<>(attributesToRemove);
+        sortedAttributes.sort(Collections.reverseOrder());
+        for (int index : sortedAttributes) {
+            if (index < newData.numAttributes() && index != classIndex) {
+                logger.info("✅ ویژگی حذف شد: {}", newData.attribute(index).name());
+                newData.deleteAttributeAt(index);
+            }
+        }
+        return newData;
+    }
+
+
+    private double calculatePearsonCorrelation(Instances data, int index1, int index2) {
+        double[] array1 = new double[data.numInstances()];
+        double[] array2 = new double[data.numInstances()];
+
+        for (int i = 0; i < data.numInstances(); i++) {
+            array1[i] = data.instance(i).value(index1);
+            array2[i] = data.instance(i).value(index2);
+        }
+
+        PearsonsCorrelation correlation = new PearsonsCorrelation();
+        return correlation.correlation(array1, array2);
     }
 
     private Instances statisticalDataAnalysis(Instances data) throws Exception {
@@ -76,7 +130,7 @@ public class BaggingService {
         return data;
     }
 
-    private Instances manageOutliers(Instances data) throws Exception {
+    private Instances manageOutliers(Instances data) {
         // حذف داده‌های پرت برای هر ویژگی عددی
         data = removeOutliersUsingIQR(data);
         return data;
@@ -97,9 +151,17 @@ public class BaggingService {
                 int missing = stats.missingCount;
                 int distinct = stats.distinctCount;
 
-                logger.info(String.format(
-                        "متغیر: %s | تعداد: %d | میانگین: %.2f | انحراف معیار: %.2f | واریانس: %.2f | حداقل: %.2f | حداکثر: %.2f | دامنه: %.2f | گمشده: %d | یکتا: %d%n-----------------",
-                        data.attribute(i).name(), count, mean, stdDev, variance, min, max, range, missing, distinct));
+                logger.info("متغیر: {} | تعداد: {} | میانگین: {} | انحراف معیار: {} | واریانس: {} | حداقل: {} | حداکثر: {} | دامنه: {} | گمشده: {} | یکتا: {}\n-----------------",
+                        data.attribute(i).name(),
+                        count,
+                        df.format(mean),
+                        df.format(stdDev),
+                        df.format(variance),
+                        df.format(min),
+                        df.format(max),
+                        df.format(range),
+                        missing,
+                        distinct);
             }
         }
     }
@@ -109,7 +171,7 @@ public class BaggingService {
         for (int i = data.numAttributes() - 1; i >= 0; i--) {
             AttributeStats stats = data.attributeStats(i);
             if (stats.distinctCount == 1) {
-                logger.info("حذف ویژگی بی‌اطلاعی: " + data.attribute(i).name());
+                logger.info("حذف ویژگی بی‌اطلاعی: {}", data.attribute(i).name());
                 data.deleteAttributeAt(i);
             }
         }
@@ -128,8 +190,8 @@ public class BaggingService {
                 } else if (missingPerc < 20) {
                     fillMissingWithMedian(modifiedData, i);
                 } else {
-                    logger.info(String.format("❌ ویژگی: %s | حذف به دلیل %.2f%% مقادیر گمشده",
-                            modifiedData.attribute(i).name(), missingPerc));
+                    logger.info("❌ ویژگی: {} | حذف به دلیل {}% مقادیر گمشده",
+                            modifiedData.attribute(i).name(), df.format(missingPerc));
                     modifiedData.deleteAttributeAt(i);
                 }
             }
@@ -144,8 +206,7 @@ public class BaggingService {
             int missing = stats.missingCount;
             double perc = (double) missing / stats.totalCount * 100;
             if (missing > 0) {
-                logger.info(String.format("ویژگی: %s | گمشده: %d (%.2f%%)",
-                        data.attribute(i).name(), missing, perc));
+                logger.info("ویژگی: {} | گمشده: {} ({}%)", data.attribute(i).name(), missing, df.format(perc));
             }
         }
     }
@@ -157,8 +218,8 @@ public class BaggingService {
                 data.instance(j).setValue(attributeIndex, mean);
             }
         }
-        logger.info(String.format("✅ ویژگی: %s | جایگزینی مقادیر گمشده با میانگین: %.2f",
-                data.attribute(attributeIndex).name(), mean));
+        logger.info("✅ ویژگی: {} | جایگزینی مقادیر گمشده با میانگین: {}",
+                data.attribute(attributeIndex).name(), df.format(mean));
     }
 
     private void fillMissingWithMedian(Instances data, int attributeIndex) {
@@ -168,8 +229,8 @@ public class BaggingService {
                 data.instance(j).setValue(attributeIndex, median);
             }
         }
-        logger.info(String.format("🔄 ویژگی: %s | جایگزینی مقادیر گمشده با میانه: %.2f",
-                data.attribute(attributeIndex).name(), median));
+        logger.info("🔄 ویژگی: {} | جایگزینی مقادیر گمشده با میانه: {}",
+                data.attribute(attributeIndex).name(), df.format(median));
     }
 
     private double calculateMedian(Instances data, int attributeIndex) {
@@ -199,8 +260,8 @@ public class BaggingService {
                 double variance = Math.pow(stdDev, 2);
                 if (variance < 0.0001 || stdDev == 0) {
                     removeIndices.add(i);
-                    logger.info(String.format("⚠️ ویژگی: %s | واریانس: %.6f | حذف (کم‌واریانس یا ثابت)",
-                            processedData.attribute(i).name(), variance));
+                    logger.info("⚠️ ویژگی: {} | واریانس: {} | حذف (کم‌واریانس یا ثابت)",
+                            processedData.attribute(i).name(), df.format(variance));
                 }
             }
         }
@@ -221,8 +282,8 @@ public class BaggingService {
                 double mean = processedData.meanOrMode(i);
                 if (stdDev > 1.5 * mean) {
                     toStandardize.add(i);
-                    logger.info(String.format("✅ ویژگی: %s | انحراف معیار: %.2f | میانگین: %.2f | استانداردسازی اعمال شد",
-                            processedData.attribute(i).name(), stdDev, mean));
+                    logger.info("✅ ویژگی: {} | انحراف معیار: {} | میانگین: {} | استانداردسازی اعمال شد",
+                            processedData.attribute(i).name(), df.format(stdDev), df.format(mean));
                 }
             }
         }
@@ -258,13 +319,19 @@ public class BaggingService {
                 outlierIndices.add(j);
             }
         }
-        Collections.sort(outlierIndices, Collections.reverseOrder());
+        outlierIndices.sort(Collections.reverseOrder());
         int removedCount = outlierIndices.size();
         for (int idx : outlierIndices) {
             data.delete(idx);
         }
-        logger.info(String.format("ویژگی: %s | Q1: %.2f | Q3: %.2f | IQR: %.2f | حد پایین: %.2f | حد بالا: %.2f | داده‌های پرت حذف شده: %d",
-                data.attribute(attributeIndex).name(), Q1, Q3, IQR, lowerBound, upperBound, removedCount));
+        logger.info("ویژگی: {} | Q1: {} | Q3: {} | IQR: {} | حد پایین: {} | حد بالا: {} | داده‌های پرت حذف شده: {}",
+                data.attribute(attributeIndex).name(),
+                df.format(Q1),
+                df.format(Q3),
+                df.format(IQR),
+                df.format(lowerBound),
+                df.format(upperBound),
+                removedCount);
         return removedCount;
     }
 
@@ -280,7 +347,7 @@ public class BaggingService {
         double IQR = Q3 - Q1;
         double lowerBound = Q1 - 1.5 * IQR;
         double upperBound = Q3 + 1.5 * IQR;
-        return new double[] { Q1, Q3, IQR, lowerBound, upperBound };
+        return new double[]{Q1, Q3, IQR, lowerBound, upperBound};
     }
 
     private Instances[] splitDataset(Instances data, double trainRatio) {
@@ -322,10 +389,10 @@ public class BaggingService {
         eval.evaluateModel(model, testData);
 
         logger.error("=== دقت مدل ===");
-        logger.error(String.format("دقت: %.2f%%", eval.pctCorrect()));
+        logger.error("دقت: {}%", df.format(eval.pctCorrect()));
         logger.error("=== گزارش طبقه‌بندی ===");
-        logger.error(eval.toSummaryString());
-        logger.error(eval.toClassDetailsString());
-        logger.error(eval.toMatrixString());
+        logger.error("{}", eval.toSummaryString());
+        logger.error("{}", eval.toClassDetailsString());
+        logger.error("{}", eval.toMatrixString());
     }
 }
