@@ -205,10 +205,12 @@ public class BaggingService {
     }
 
     private Instances preprocessData(Instances data) throws Exception {
+        // ایجاد یک کپی از داده‌ها برای پردازش
         Instances processedData = new Instances(data);
+
+        // لیست متغیرهایی که باید نرمال‌سازی شوند
         List<Integer> attributesToNormalize = new ArrayList<>();
 
-        // شناسایی ویژگی‌هایی که نیاز به نرمال‌سازی دارند
         for (int i = 0; i < processedData.numAttributes(); i++) {
             if (processedData.attribute(i).isNumeric()) {
                 AttributeStats stats = processedData.attributeStats(i);
@@ -218,38 +220,21 @@ public class BaggingService {
                 // بررسی اگر انحراف معیار از 1.5 برابر میانگین بیشتر باشد → نرمال‌سازی لازم است
                 if (stdDev > 1.5 * mean) {
                     attributesToNormalize.add(i);
-                    System.out.printf("✅ Attribute: %s | StdDev: %.2f | Mean: %.2f | Needs Normalization\n",
+                    System.out.printf("✅ Attribute: %s | StdDev: %.2f | Mean: %.2f | Scaling Applied\n",
                             processedData.attribute(i).name(), stdDev, mean);
                 }
             }
         }
 
-        // اگر هیچ متغیری برای نرمال‌سازی وجود ندارد، داده‌ها را بدون تغییر برگردان
-        if (attributesToNormalize.isEmpty()) {
-            return processedData;
-        }
-
-        // حذف ویژگی‌های غیرضروری و تمرکز بر ویژگی‌های قابل نرمال‌سازی
-        Remove removeFilter = new Remove();
-        removeFilter.setAttributeIndicesArray(attributesToNormalize.stream().mapToInt(i -> i).toArray());
-        removeFilter.setInvertSelection(true); // فقط ویژگی‌های مشخص‌شده باقی بمانند
-        removeFilter.setInputFormat(processedData);
-        Instances selectedData = Filter.useFilter(processedData, removeFilter);
-
-        // اعمال نرمال‌سازی فقط روی ویژگی‌های انتخاب‌شده
-        Standardize standardize = new Standardize();
-        standardize.setInputFormat(selectedData);
-        Instances normalizedData = Filter.useFilter(selectedData, standardize);
-
-        // جایگزین کردن داده‌های نرمال‌شده در مجموعه داده اصلی
-        for (int i = 0; i < attributesToNormalize.size(); i++) {
-            int attrIndex = attributesToNormalize.get(i);
-            for (int j = 0; j < processedData.numInstances(); j++) {
-                processedData.instance(j).setValue(attrIndex, normalizedData.instance(j).value(i));
-            }
+        if (!attributesToNormalize.isEmpty()) {
+            // روش استانداردسازی
+            Standardize standardize = new Standardize();
+            standardize.setInputFormat(processedData);
+            processedData = Filter.useFilter(processedData, standardize);
         }
 
         return processedData;
+
     }
 
 
