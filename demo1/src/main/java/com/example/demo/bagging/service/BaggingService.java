@@ -35,6 +35,9 @@ public class BaggingService {
         // // حذف داده‌های پرت بر اساس IQR
         data = removeOutliersUsingIQR(data);
 
+        // حذف متغیرهای با واریانس بسیار پایین یا مقدار ثابت
+//        حذف متغیرهای بی‌اثر بر مدل
+        data = removeLowVarianceAttributes(data);
 
         // استانداردسازی داده‌ها ----- بهتر نشد وقتی گذاشتمیش
         // اگر انحراف معیار زیاد باشد → داده‌ها نرمال‌سازی شوند (Min-Max Scaling, Standardization).
@@ -53,6 +56,41 @@ public class BaggingService {
         evaluateModel(baggingModel, trainData, testData);
 
     }
+
+    private Instances removeLowVarianceAttributes(Instances data) {
+//        حذف متغیرهای بی‌اثر بر مدلحذف متغیرهای بی‌اثر بر مدل
+        Instances processedData = new Instances(data);
+
+        List<Integer> attributesToRemove = new ArrayList<>();
+
+        for (int i = 0; i < processedData.numAttributes(); i++) {
+            if (processedData.attribute(i).isNumeric()) {
+                AttributeStats stats = processedData.attributeStats(i);
+                double stdDev = stats.numericStats.stdDev;
+                double variance = Math.pow(stdDev, 2);
+
+                // بررسی ویژگی‌های کم واریانس یا ثابت
+                if (variance < 0.0001) { // واریانس بسیار پایین (بی‌تأثیر بر مدل)
+                    attributesToRemove.add(i);
+                    System.out.printf("⚠️ Attribute: %s | Variance: %.6f | Removed (Low Variance)\n",
+                            processedData.attribute(i).name(), variance);
+                } else if (stdDev == 0) { // مقدار ثابت در همه داده‌ها
+                    attributesToRemove.add(i);
+                    System.out.printf("⚠️ Attribute: %s | StdDev: 0 | Removed (Constant Feature)\n",
+                            processedData.attribute(i).name());
+                }
+            }
+        }
+
+        // حذف ویژگی‌های بی‌اثر از مجموعه داده‌ها
+        Collections.reverse(attributesToRemove); // معکوس‌سازی لیست برای جلوگیری از Index Out Of Bounds
+        for (int index : attributesToRemove) {
+            processedData.deleteAttributeAt(index);
+        }
+
+        return processedData;
+    }
+
 
     private Map<Double, Integer> getClassDistribution(Instances data) {
         Map<Double, Integer> classCounts = new HashMap<>();
