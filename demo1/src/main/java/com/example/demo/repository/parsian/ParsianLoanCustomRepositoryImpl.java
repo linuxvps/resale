@@ -95,7 +95,7 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
      */
     private String buildLoanSql(final List<String> importantColumns) {
         String columns = String.join(", ", importantColumns);
-        return "SELECT " + columns + " FROM ln.parsian_loan WHERE id < 500";
+        return "SELECT " + columns + " FROM ln.parsian_loan WHERE id < 300000";
     }
 
     /**

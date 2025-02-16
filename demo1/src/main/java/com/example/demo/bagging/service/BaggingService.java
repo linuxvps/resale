@@ -35,8 +35,11 @@ public class BaggingService {
         // // حذف داده‌های پرت بر اساس IQR
         data = removeOutliersUsingIQR(data);
 
+        // بررسی و اصلاح مقادیر گمشده
+        data = handleMissingValues(data);
+
         // حذف متغیرهای با واریانس بسیار پایین یا مقدار ثابت
-//        حذف متغیرهای بی‌اثر بر مدل
+        // حذف متغیرهای بی‌اثر بر مدل
         data = removeLowVarianceAttributes(data);
 
         // استانداردسازی داده‌ها ----- بهتر نشد وقتی گذاشتمیش
@@ -56,6 +59,82 @@ public class BaggingService {
         evaluateModel(baggingModel, trainData, testData);
 
     }
+
+    private void logMissingValues(Instances data) {
+        System.out.println("\n=== Missing Values Analysis ===");
+        for (int i = 0; i < data.numAttributes(); i++) {
+            AttributeStats stats = data.attributeStats(i);
+            int missingCount = stats.missingCount;
+            double missingPercentage = (double) missingCount / stats.totalCount * 100;
+
+            if (missingCount > 0) {
+                System.out.printf("Attribute: %s | Missing: %d (%.2f%%) %n",
+                        data.attribute(i).name(), missingCount, missingPercentage);
+            }
+        }
+    }
+
+    private Instances handleMissingValues(Instances data) {
+        logMissingValues(data);
+
+        Instances modifiedData = new Instances(data);
+
+        for (int i = 0; i < modifiedData.numAttributes(); i++) {
+            AttributeStats stats = modifiedData.attributeStats(i);
+            int missingCount = stats.missingCount;
+            double missingPercentage = (double) missingCount / stats.totalCount * 100;
+
+            if (missingCount > 0) {
+                if (missingPercentage < 5) {
+                    // ✅ پر کردن مقادیر گمشده با میانگین (Mean)
+                    double meanValue = modifiedData.meanOrMode(i);
+                    for (int j = 0; j < modifiedData.numInstances(); j++) {
+                        if (modifiedData.instance(j).isMissing(i)) {
+                            modifiedData.instance(j).setValue(i, meanValue);
+                        }
+                    }
+                    System.out.printf("✅ Attribute: %s | Filled with Mean: %.2f%n",
+                            modifiedData.attribute(i).name(), meanValue);
+                }
+                else if (missingPercentage < 20) {
+                    // 🔄 پر کردن مقادیر گمشده با میانه (Median)
+                    double medianValue = calculateMedian(modifiedData, i);
+                    for (int j = 0; j < modifiedData.numInstances(); j++) {
+                        if (modifiedData.instance(j).isMissing(i)) {
+                            modifiedData.instance(j).setValue(i, medianValue);
+                        }
+                    }
+                    System.out.printf("🔄 Attribute: %s | Filled with Median: %.2f%n",
+                            modifiedData.attribute(i).name(), medianValue);
+                }
+                else {
+                    // ❌ حذف ویژگی‌هایی که بیش از 20٪ مقدار گمشده دارند
+                    System.out.printf("❌ Attribute: %s | Removed due to high missing rate (%.2f%%)%n",
+                            modifiedData.attribute(i).name(), missingPercentage);
+                    modifiedData.deleteAttributeAt(i);
+                }
+            }
+        }
+
+        return modifiedData;
+    }
+    private double calculateMedian(Instances data, int attributeIndex) {
+        List<Double> values = new ArrayList<>();
+        for (int i = 0; i < data.numInstances(); i++) {
+            if (!data.instance(i).isMissing(attributeIndex)) {
+                values.add(data.instance(i).value(attributeIndex));
+            }
+        }
+        Collections.sort(values);
+        int middle = values.size() / 2;
+        if (values.size() % 2 == 0) {
+            return (values.get(middle - 1) + values.get(middle)) / 2.0;
+        } else {
+            return values.get(middle);
+        }
+    }
+
+
 
     private Instances removeLowVarianceAttributes(Instances data) {
 //        حذف متغیرهای بی‌اثر بر مدلحذف متغیرهای بی‌اثر بر مدل
