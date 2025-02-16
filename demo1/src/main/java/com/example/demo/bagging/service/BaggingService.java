@@ -37,6 +37,7 @@ public class BaggingService {
 
 
         // استانداردسازی داده‌ها ----- بهتر نشد وقتی گذاشتمیش
+        // اگر انحراف معیار زیاد باشد → داده‌ها نرمال‌سازی شوند (Min-Max Scaling, Standardization).
         data = preprocessData(data);
 
         Instances[] splitData = splitDataset(data, 0.7);
@@ -84,12 +85,37 @@ public class BaggingService {
     }
 
     private Instances preprocessData(Instances data) throws Exception {
-        // استانداردسازی متغیرهای عددی
-        Standardize standardize = new Standardize();
-        standardize.setInputFormat(data);
-        data = Filter.useFilter(data, standardize);
-        return data;
+        // ایجاد یک کپی از داده‌ها برای پردازش
+        Instances processedData = new Instances(data);
+
+        // لیست متغیرهایی که باید نرمال‌سازی شوند
+        List<Integer> attributesToNormalize = new ArrayList<>();
+
+        for (int i = 0; i < processedData.numAttributes(); i++) {
+            if (processedData.attribute(i).isNumeric()) {
+                AttributeStats stats = processedData.attributeStats(i);
+                double stdDev = stats.numericStats.stdDev;
+                double mean = processedData.meanOrMode(i);
+
+                // بررسی اگر انحراف معیار از 1.5 برابر میانگین بیشتر باشد → نرمال‌سازی لازم است
+                if (stdDev > 1.5 * mean) {
+                    attributesToNormalize.add(i);
+                    System.out.printf("✅ Attribute: %s | StdDev: %.2f | Mean: %.2f | Scaling Applied\n",
+                            processedData.attribute(i).name(), stdDev, mean);
+                }
+            }
+        }
+
+        if (!attributesToNormalize.isEmpty()) {
+            // روش استانداردسازی
+            Standardize standardize = new Standardize();
+            standardize.setInputFormat(processedData);
+            processedData = Filter.useFilter(processedData, standardize);
+        }
+
+        return processedData;
     }
+
 
     private Instances removeOutliersUsingIQR(Instances data) {
         Instances filteredData = new Instances(data); // کپی از داده‌ها
