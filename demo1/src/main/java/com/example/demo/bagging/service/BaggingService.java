@@ -56,12 +56,12 @@ public class BaggingService {
     }
 
     private Instances prepareData(Instances data) throws Exception {
-        data = analyzeData(data);
+        data = statisticalDataAnalysis(data);
         data = manageOutliers(data);
         return data;
     }
 
-    private Instances analyzeData(Instances data) throws Exception {
+    private Instances statisticalDataAnalysis(Instances data) throws Exception {
         // تحلیل اولیه آماری برای آگاهی از وضعیت داده‌ها
         analyzeStatistics(data);
         // حذف ویژگی‌هایی که تنها یک مقدار یکتا دارند
