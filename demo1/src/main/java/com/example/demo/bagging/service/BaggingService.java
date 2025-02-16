@@ -28,7 +28,7 @@ public class BaggingService {
     public void calcBagging() throws Exception {
         Instances data = parsianLoanRepository.createInstance();
 
-        //tahlil amari
+        // تحلیل آماری
         analyzeStatistics(data);
         removeUninformativeAttributes(data);
 

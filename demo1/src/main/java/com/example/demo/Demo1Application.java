@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
+//--add-opens java.base/java.lang=ALL-UNNAMED
 @SpringBootApplication
 public class Demo1Application implements CommandLineRunner {
 
