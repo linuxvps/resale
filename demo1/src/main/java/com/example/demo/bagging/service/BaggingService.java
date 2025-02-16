@@ -173,25 +173,6 @@ public class BaggingService {
         return processedData;
     }
 
-
-    private Map<Double, Integer> getClassDistribution(Instances data) {
-        Map<Double, Integer> classCounts = new HashMap<>();
-        int classIndex = data.classIndex();
-
-        for (Instance instance : data) {
-            double classValue = instance.classValue();
-            classCounts.put(classValue, classCounts.getOrDefault(classValue, 0) + 1);
-        }
-
-        // نمایش اطلاعات کلاس‌ها
-        System.out.println("\n=== Class Balance ===");
-        for (Map.Entry<Double, Integer> entry : classCounts.entrySet()) {
-            System.out.printf("Class: %.0f | Count: %d\n", entry.getKey(), entry.getValue());
-        }
-
-        return classCounts;
-    }
-
     private Instances removeUninformativeAttributes(Instances data) {
         // جذف Attribute برخی متغیرها مقدارهای یکتا بسیار کم دارند
         for (int i = data.numAttributes() - 1; i >= 0; i--) {
