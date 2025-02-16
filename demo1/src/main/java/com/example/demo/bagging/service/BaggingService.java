@@ -59,7 +59,7 @@ public class BaggingService {
         // تحلیل اولیه آماری برای آگاهی از وضعیت داده‌ها
         analyzeStatistics(data);
         // حذف ویژگی‌هایی که تنها یک مقدار یکتا دارند
-        data = removeUninformativeAttributes(data);
+        removeUninformativeAttributes(data);
         // رفع یا حذف مقادیر گمشده
         data = handleMissingValues(data);
         // حذف ویژگی‌های کم‌واریانس یا ثابت
@@ -93,7 +93,7 @@ public class BaggingService {
         }
     }
 
-    private Instances removeUninformativeAttributes(Instances data) {
+    private void removeUninformativeAttributes(Instances data) {
         // حذف ویژگی‌هایی که تنها یک مقدار یکتا دارند
         for (int i = data.numAttributes() - 1; i >= 0; i--) {
             AttributeStats stats = data.attributeStats(i);
@@ -102,7 +102,6 @@ public class BaggingService {
                 data.deleteAttributeAt(i);
             }
         }
-        return data;
     }
 
     private Instances handleMissingValues(Instances data) {
