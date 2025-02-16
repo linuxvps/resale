@@ -56,6 +56,12 @@ public class BaggingService {
     }
 
     private Instances prepareData(Instances data) throws Exception {
+        data = analyzeData(data);
+        data = manageOutliers(data);
+        return data;
+    }
+
+    private Instances analyzeData(Instances data) throws Exception {
         // تحلیل اولیه آماری برای آگاهی از وضعیت داده‌ها
         analyzeStatistics(data);
         // حذف ویژگی‌هایی که تنها یک مقدار یکتا دارند
@@ -66,6 +72,11 @@ public class BaggingService {
         data = removeLowVarianceAttributes(data);
         // اعمال استانداردسازی در صورت نیاز
         data = standardizeData(data);
+
+        return data;
+    }
+
+    private Instances manageOutliers(Instances data) throws Exception {
         // حذف داده‌های پرت برای هر ویژگی عددی
         data = removeOutliersUsingIQR(data);
         return data;
