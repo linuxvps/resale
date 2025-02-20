@@ -24,36 +24,40 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
 
     /**
      * متد دریافت مقادیر متمایز یک ستون مشخص از جدول parsian_loan
+     *
      * @param column نام ستونی که باید مقادیر یکتا از آن گرفته شود.
      * @return لیستی از مقادیر متمایز
      */
     @Override
-    public List<?> findDistinct(final String column) {
-        final String sql = "SELECT DISTINCT " + column + " FROM parsian_loan";
+    public List<?> findDistinct(final String column, String condition) {
+        final String sql = "SELECT DISTINCT " + column + " FROM parsian_loan " + condition;
         Query query = entityManager.createNativeQuery(sql);
         return query.getResultList();
     }
 
     /**
      * متد ساخت دیتاست Instances برای عملیات یادگیری ماشین (استفاده در Weka)
+     *
      * @return مجموعه Instances که حاوی رکوردها و ویژگی‌ها است.
      */
     @SneakyThrows
     @Override
     public Instances createInstance() {
         final String nominalColumnName = "status";
+        final String condition = " where id < 100000";
         List<String> importantColumns = loadImportantColumns();
         moveNominalColumnToEnd(importantColumns, nominalColumnName);
 
+        importantColumns = importantColumns.stream().filter(s -> !s.contains("date")).toList();
         ArrayList<Attribute> attributes = importantColumns.stream()
                 .filter(column -> !column.equals(nominalColumnName))
                 .map(Attribute::new)
                 .collect(Collectors.toCollection(ArrayList::new));
-        final List<String> nominalStatus = loadNominalValues(nominalColumnName);
+        final List<String> nominalStatus = loadNominalValues(nominalColumnName, condition);
         attributes.add(new Attribute(nominalColumnName, nominalStatus));
 
 
-        final String loanSql = buildLoanSql(importantColumns);
+        final String loanSql = buildLoanSql(importantColumns, condition);
         final List<?> resultList = getLoanData(loanSql);
         final List<Object> dynamicObjects = DynamicClassGenerator.generateDynamicObjects(importantColumns, resultList);
 
@@ -77,11 +81,12 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
 
     /**
      * متد بارگذاری ستون‌های با اهمیت سطح ۴ از جدول مورد نظر
+     *
      * @return لیستی از ستون‌های مهم
      */
     private List<String> loadImportantColumns() {
         final String featureSql =
-                "SELECT column_name FROM ln.loan_features WHERE importance_level = 4 AND table_name = 'parsian_loan'";
+                "SELECT column_name FROM ln.loan_features WHERE importance_level in (4,3) AND table_name = 'parsian_loan'";
         @SuppressWarnings("unchecked")
         List<String> columns = entityManager.createNativeQuery(featureSql).getResultList();
         if (columns.isEmpty()) {
@@ -93,9 +98,9 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
     /**
      * متد کمک‌کننده برای ساخت Query اصلی جهت دریافت داده‌های وام
      */
-    private String buildLoanSql(final List<String> importantColumns) {
+    private String buildLoanSql(final List<String> importantColumns, String condition) {
         String columns = String.join(", ", importantColumns);
-        return "SELECT " + columns + " FROM ln.parsian_loan WHERE id < 10000";
+        return "SELECT " + columns + " FROM ln.parsian_loan " + condition;
     }
 
     /**
@@ -109,10 +114,11 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
 
     /**
      * افزودن رکوردهای موجود در resultList به دیتاست Weka
-     * @param resultList لیست اشیا (چه آرایه Object[] و چه اشیا داینامیک)
+     *
+     * @param resultList       لیست اشیا (چه آرایه Object[] و چه اشیا داینامیک)
      * @param importantColumns لیست ستون‌های مهم
-     * @param attributes لیست Attributeها
-     * @param dataset شیء Instances هدف برای درج داده
+     * @param attributes       لیست Attributeها
+     * @param dataset          شیء Instances هدف برای درج داده
      */
     private void addInstancesToDataset(final List<?> resultList,
                                        final List<String> importantColumns,
@@ -193,8 +199,8 @@ public class ParsianLoanCustomRepositoryImpl implements ParsianLoanCustomReposit
     /**
      * دریافت لیستی از مقادیر یکتای ستون Nominal به صورت رشته
      */
-    private ArrayList<String> loadNominalValues(final String nominalColumnName) {
-        return findDistinct(nominalColumnName)
+    private ArrayList<String> loadNominalValues(final String nominalColumnName, final String condition) {
+        return findDistinct(nominalColumnName, condition)
                 .stream()
                 .map(Object::toString)
                 .collect(Collectors.toCollection(ArrayList::new));

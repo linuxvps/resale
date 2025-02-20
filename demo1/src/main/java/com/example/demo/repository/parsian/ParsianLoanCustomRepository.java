@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface ParsianLoanCustomRepository {
 
-    List<?> findDistinct(String column);
+    List<?> findDistinct(String column, String condition);
 
     Instances createInstance();
 }

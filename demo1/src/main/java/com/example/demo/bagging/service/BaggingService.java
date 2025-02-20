@@ -8,12 +8,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import weka.classifiers.Classifier;
+import weka.classifiers.CostMatrix;
 import weka.classifiers.Evaluation;
-import weka.classifiers.functions.Logistic;
-import weka.classifiers.functions.SMO;
 import weka.classifiers.meta.Bagging;
+import weka.classifiers.meta.CostSensitiveClassifier;
 import weka.classifiers.meta.Vote;
 import weka.classifiers.trees.J48;
+import weka.classifiers.functions.Logistic;
+import weka.classifiers.functions.SMO;
 import weka.core.AttributeStats;
 import weka.core.Instances;
 import weka.core.SelectedTag;
@@ -33,22 +35,23 @@ public class BaggingService {
     private ParsianLoanRepository parsianLoanRepository;
 
     public void calcBagging() throws Exception {
-        // بارگذاری داده از منبع
+        // بارگذاری داده‌ها از منبع
         Instances rawData = loadData();
-        // اجرای خط لوله پیش‌پردازش داده
+        // اجرای مراحل پیش‌پردازش روی داده‌ها
         Instances preprocessedData = prepareData(rawData);
-        // تقسیم داده به آموزش و تست
+        // تقسیم داده‌ها به مجموعه‌های آموزش و تست
         Instances[] splits = splitDataset(preprocessedData, 0.7);
         Instances trainData = splits[0];
         Instances testData = splits[1];
 
-        // ایجاد مدل‌های پایه و ترکیب آن‌ها با رای‌گیری
+        // ایجاد مدل‌های پایه و ترکیب آن‌ها با مدل رای‌گیری
         Classifier[] baseModels = getBaseModels();
         Vote votingModel = createVotingModel(baseModels);
-        // ساخت و آموزش مدل Bagging
-        Bagging baggingModel = trainBaggingModel(votingModel, trainData);
-        // ارزیابی مدل نهایی
-        evaluateModel(baggingModel, trainData, testData);
+
+        // ساخت مدل بگینگ با تلفیق ماتریس زیان جهت بهبود دقت مدل
+        CostSensitiveClassifier costSensitiveModel = trainCostSensitiveBaggingModel(votingModel, trainData);
+        // ارزیابی مدل نهایی با استفاده از داده‌های تست
+        evaluateModel(costSensitiveModel, trainData, testData);
     }
 
     private Instances loadData() {
@@ -57,25 +60,30 @@ public class BaggingService {
 
     private Instances prepareData(Instances data) throws Exception {
         data = statisticalDataAnalysis(data);
-        data = removeHighlyCorrelatedFeatures(data, 0.95);
+        data = removeHighlyCorrelatedFeatures(data, 0.7);
         data = manageOutliers(data);
         return data;
     }
 
     private Instances removeHighlyCorrelatedFeatures(Instances data, double threshold) {
-        // ساخت یک کپی از داده‌های ورودی
         Instances newData = new Instances(data);
         int numAttributes = newData.numAttributes();
         int classIndex = newData.classIndex();
         Set<Integer> attributesToRemove = new HashSet<>();
 
-        // بررسی تمامی جفت ویژگی‌های عددی
+        double[][] correlationMatrix = new double[numAttributes][numAttributes];
+        String[] attributeNames = new String[numAttributes];
+
+        // محاسبه همبستگی بین تمامی متغیرهای عددی
         for (int i = 0; i < numAttributes - 1; i++) {
+            attributeNames[i] = newData.attribute(i).name();
             for (int j = i + 1; j < numAttributes; j++) {
                 if (newData.attribute(i).isNumeric() && newData.attribute(j).isNumeric()) {
                     double correlation = calculatePearsonCorrelation(newData, i, j);
+                    correlationMatrix[i][j] = correlation;
+                    correlationMatrix[j][i] = correlation;
+
                     if (Math.abs(correlation) > threshold) {
-                        // اطمینان از عدم حذف ویژگی کلاس
                         if (j != classIndex) {
                             logger.info("🔴 همبستگی بالا بین: {} و {} | مقدار: {} | حذف: {}",
                                     newData.attribute(i).name(),
@@ -89,7 +97,7 @@ public class BaggingService {
             }
         }
 
-        // حذف ویژگی‌ها به ترتیب نزولی برای جلوگیری از تغییر ایندکس‌ها
+        // حذف ویژگی‌های با همبستگی بالا
         List<Integer> sortedAttributes = new ArrayList<>(attributesToRemove);
         sortedAttributes.sort(Collections.reverseOrder());
         for (int index : sortedAttributes) {
@@ -98,7 +106,39 @@ public class BaggingService {
                 newData.deleteAttributeAt(index);
             }
         }
+
+        // نمایش ماتریس همبستگی
+        displayCorrelationMatrix(attributeNames, correlationMatrix);
+
         return newData;
+    }
+
+    // نمایش ماتریس همبستگی به صورت جدول برای ورد
+    private void displayCorrelationMatrix(String[] attributeNames, double[][] matrix) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n=== ماتریس همبستگی ===\n");
+
+        // سرتیتر متغیرها
+        sb.append("\t");
+        for (String name : attributeNames) {
+            if (name != null) sb.append(name).append("\t");
+        }
+        sb.append("\n");
+
+        // مقداردهی به ماتریس
+        for (int i = 0; i < matrix.length; i++) {
+            if (attributeNames[i] != null) {
+                sb.append(attributeNames[i]).append("\t");
+                for (int j = 0; j < matrix[i].length; j++) {
+                    if (attributeNames[j] != null) {
+                        sb.append(String.format("%.2f", matrix[i][j])).append("\t");
+                    }
+                }
+                sb.append("\n");
+            }
+        }
+
+        logger.info(sb.toString());
     }
 
 
@@ -116,22 +156,15 @@ public class BaggingService {
     }
 
     private Instances statisticalDataAnalysis(Instances data) throws Exception {
-        // تحلیل اولیه آماری برای آگاهی از وضعیت داده‌ها
         analyzeStatistics(data);
-        // حذف ویژگی‌هایی که تنها یک مقدار یکتا دارند
         removeUninformativeAttributes(data);
-        // رفع یا حذف مقادیر گمشده
         data = handleMissingValues(data);
-        // حذف ویژگی‌های کم‌واریانس یا ثابت
         data = removeLowVarianceAttributes(data);
-        // اعمال استانداردسازی در صورت نیاز
         data = standardizeData(data);
-
         return data;
     }
 
     private Instances manageOutliers(Instances data) {
-        // حذف داده‌های پرت برای هر ویژگی عددی
         data = removeOutliersUsingIQR(data);
         return data;
     }
@@ -164,10 +197,10 @@ public class BaggingService {
                         distinct);
             }
         }
+        logger.info("===اتمام آمار توصیفی ===");
     }
 
     private void removeUninformativeAttributes(Instances data) {
-        // حذف ویژگی‌هایی که تنها یک مقدار یکتا دارند
         for (int i = data.numAttributes() - 1; i >= 0; i--) {
             AttributeStats stats = data.attributeStats(i);
             if (stats.distinctCount == 1) {
@@ -375,13 +408,38 @@ public class BaggingService {
         return votingModel;
     }
 
-    private Bagging trainBaggingModel(Vote votingModel, Instances trainData) throws Exception {
+    private CostSensitiveClassifier trainCostSensitiveBaggingModel(Vote votingModel, Instances trainData) throws Exception {
         Bagging baggingModel = new Bagging();
         baggingModel.setClassifier(votingModel);
-        baggingModel.setNumIterations(10);
-        baggingModel.setBagSizePercent(80);
+        // افزایش تعداد تکرارهای بگینگ از 10 به 50 برای پوشش بهتر فضای ویژگی‌ها
+        baggingModel.setNumIterations(50);
+        // استفاده از 100 درصد داده در هر نمونه‌گیری
+        baggingModel.setBagSizePercent(100);
         baggingModel.buildClassifier(trainData);
-        return baggingModel;
+
+        CostSensitiveClassifier costSensitiveClassifier = new CostSensitiveClassifier();
+        costSensitiveClassifier.setClassifier(baggingModel);
+
+        // تعریف ماتریس زیان با مقادیر بالاتر برای جریمه شدید اشتباهات
+        CostMatrix costMatrix = new CostMatrix(6);
+        double[][] matrix = {
+                {0.0, 10.0, 10.0, 10.0, 10.0, 10.0},
+                {10.0, 0.0, 10.0, 10.0, 10.0, 10.0},
+                {10.0, 10.0, 0.0, 10.0, 10.0, 10.0},
+                {10.0, 10.0, 10.0, 0.0, 10.0, 10.0},
+                {10.0, 10.0, 10.0, 10.0, 0.0, 10.0},
+                {10.0, 10.0, 10.0, 10.0, 10.0, 0.0}
+        };
+        for (int i = 0; i < matrix.length; i++) {
+            for (int j = 0; j < matrix[i].length; j++) {
+                costMatrix.setElement(i, j, matrix[i][j]);
+            }
+        }
+        costSensitiveClassifier.setCostMatrix(costMatrix);
+        costSensitiveClassifier.setMinimizeExpectedCost(true);
+        costSensitiveClassifier.buildClassifier(trainData);
+
+        return costSensitiveClassifier;
     }
 
     private void evaluateModel(Classifier model, Instances trainData, Instances testData) throws Exception {
