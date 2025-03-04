@@ -13,7 +13,7 @@ from sklearn.ensemble import (
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, confusion_matrix
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from xgboost import XGBClassifier
