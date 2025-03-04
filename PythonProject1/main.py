@@ -136,8 +136,8 @@ def computeLosses(cash_flow_info):
     # خروجی ضررPN = interest
     # و ضررNP = principal + interest
     # برای سادگی فرض می‌کنیم خروجی را در آرایه های lambdaPN_arr و lambdaNP_arr برمی‌گردانیم
-    principal = cash_flow_info['principal'].values
-    interest = cash_flow_info['interest'].values
+    principal = cash_flow_info['approval_amount'].values
+    interest = cash_flow_info['interest_amount'].values
     # اینجا فرض می‌کنیم ترتیب cash_flow_info دقیقاً با X_test همراستا باشد و rowها یک‌به‌یک منطبق باشند
     # در عمل باید مراقب ایندکس‌ها بود
 
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     data_test_cashflow = X_test[['approval_amount', 'interest_amount']]
 
     # مرحله دوم: آموزش مدل LGBM و محاسبه احتمال پیش‌فرض
-    p_pred_test, lgbm_model = trainLightGBMModel(X_train_res, y_train_res, X_test)
+    # p_pred_test, lgbm_model = trainLightGBMModel(X_train_res, y_train_res, X_test)
 
     # ضرر PN: که برابر با سود (interest) هست؛ یعنی اگر ما به اشتباه وامی رو به عنوان غیر نکول در نظر بگیریم، سود از دست رفته چقدر میشه.
     # ضرر NP: که برابر با مجموع اصل و سود (principal + interest) هست؛ یعنی اگر ما به اشتباه وامی رو به عنوان نکول در نظر بگیریم، کل مبلغ ضرر از دست رفته چقدر میشه.
