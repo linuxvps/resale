@@ -361,16 +361,14 @@ if __name__ == "__main__":
     # X_train_res, y_train_res, X_test, y_test = preProcessData('data.csv')
     X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB(session)
 
-    # یک دیتافریم فرضی برای جریان نقدی در تست (برای محاسبه ضرر)
-    # در عمل باید از داده‌های واقعی استفاده کرد، اینجا برای نمونه
-    # طول آن برابر طول X_test است
-    data_test_cashflow = pd.DataFrame({
-        'principal': np.random.randint(1000, 10000, size=len(X_test)),
-        'interest': np.random.randint(100, 2000, size=len(X_test)),
-    })
+    # استفاده از اطلاعات جریان نقدی واقعی موجود در X_test (فرض می‌کنیم ستون‌های 'principal' و 'interest' در X_test موجود هستند)
+    data_test_cashflow = X_test[['approval_amount', 'interest_amount']]
 
     # مرحله دوم: آموزش مدل LGBM و محاسبه احتمال پیش‌فرض
     p_pred_test, lgbm_model = trainLightGBMModel(X_train_res, y_train_res, X_test)
+
+    # ضرر PN: که برابر با سود (interest) هست؛ یعنی اگر ما به اشتباه وامی رو به عنوان غیر نکول در نظر بگیریم، سود از دست رفته چقدر میشه.
+    # ضرر NP: که برابر با مجموع اصل و سود (principal + interest) هست؛ یعنی اگر ما به اشتباه وامی رو به عنوان نکول در نظر بگیریم، کل مبلغ ضرر از دست رفته چقدر میشه.
 
     # مرحله سوم: محاسبه ضررهای PN و NP بر اساس جریان نقدی
     lambdaPN_arr_test, lambdaNP_arr_test = computeLosses(data_test_cashflow)
