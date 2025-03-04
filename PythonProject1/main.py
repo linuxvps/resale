@@ -4,13 +4,77 @@ import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
 from lightgbm import LGBMClassifier
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
+from sklearn.ensemble import (
+    ExtraTreesClassifier,
+    RandomForestClassifier,
+    GradientBoostingClassifier,
+    AdaBoostClassifier,
+)
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, confusion_matrix
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from xgboost import XGBClassifier
+
+from ParsianLoan import ParsianLoan
+
+# اطلاعات اتصال به MySQL
+DATABASE_URL = "mysql+pymysql://root:root@localhost:3306/ln"
+
+# ایجاد Engine
+engine = create_engine(DATABASE_URL, echo=True)
+
+# ایجاد Session
+SessionLocal = sessionmaker(bind=engine)
+session = SessionLocal()
+
+
+def preProcessDataFromDB(session):
+    """
+    این متد داده‌ها را از دیتابیس می‌خواند، پردازش اولیه روی آن‌ها انجام می‌دهد،
+    داده‌های گمشده را پر می‌کند، داده‌های اسمی را کدگذاری کرده و در نهایت مجموعه داده را
+    به دو بخش آموزشی و آزمایشی تقسیم کرده و با SMOTE مجموعه آموزشی را متعادل می‌کند.
+    """
+
+    # دریافت داده از دیتابیس و تبدیل آن به DataFrame
+    loans = session.query(ParsianLoan).all()
+    df = pd.DataFrame([loan.__dict__ for loan in loans])
+    df.drop(columns=["_sa_instance_state"], inplace=True)
+
+    print("ستون‌های دیتافریم:", df.columns.tolist())  # نمایش ستون‌های دیتافریم
+
+    # بررسی مقدارهای `status`
+    print("مقدارهای یکتای ستون `status`:")
+    print(df['status'].value_counts())
+
+    # تبدیل `status` به مقدار عددی (نکول = ۱، بقیه = ۰)
+    df['status'] = df['status'].apply(lambda x: 1 if x.lower() == "defaulted" else 0)
+
+    # جدا کردن ویژگی‌ها (X) و برچسب (y)
+    X = df.drop(['status'], axis=1)
+    y = df['status']
+
+    print("تعداد برچسب‌های نکول و غیرنکول:")
+    print(y.value_counts())  # نمایش تعداد نمونه‌های هر کلاس
+
+    # شناسایی ستون‌های عددی
+    numeric_columns = X.select_dtypes(include=['int64', 'float64', 'int', 'float']).columns
+
+    # پر کردن داده‌های گمشده در ستون‌های عددی با میانگین
+    imputer = SimpleImputer(strategy='mean')
+    X[numeric_columns] = imputer.fit_transform(X[numeric_columns])
+
+    # تقسیم داده‌ها به آموزش و تست
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # اعمال SMOTE برای متعادل‌سازی کلاس‌های نکول و غیرنکول
+    sm = SMOTE(random_state=42)
+    X_train_res, y_train_res = sm.fit_resample(X_train, y_train)
+
+    return X_train_res, y_train_res, X_test, y_test
+
 
 
 # این تابع، کل پروسه پیش‌پردازش شامل پاکسازی مقادیر گمشده، حذف ویژگی‌های نامناسب و اعمال SMOTE را انجام می‌دهد
@@ -295,7 +359,8 @@ def predictStacking(X_test, base_models, meta_model):
 # کد اصلی که مراحل مقاله را اجرا می‌کند
 if __name__ == "__main__":
     # مرحله اول: پیش‌پردازش داده
-    X_train_res, y_train_res, X_test, y_test = preProcessData('data.csv')
+    # X_train_res, y_train_res, X_test, y_test = preProcessData('data.csv')
+    X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB(session)
 
     # یک دیتافریم فرضی برای جریان نقدی در تست (برای محاسبه ضرر)
     # در عمل باید از داده‌های واقعی استفاده کرد، اینجا برای نمونه
