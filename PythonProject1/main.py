@@ -21,7 +21,7 @@ from xgboost import XGBClassifier
 from ParsianLoan import ParsianLoan
 
 # اطلاعات اتصال به MySQL
-DATABASE_URL = "mysql+pymysql://root:root@localhost:3306/ln"
+DATABASE_URL = "mysql+pymysql://root:pass@localhost:3306/ln"
 
 # ایجاد Engine
 engine = create_engine(DATABASE_URL, echo=True)
@@ -31,50 +31,49 @@ SessionLocal = sessionmaker(bind=engine)
 session = SessionLocal()
 
 
-def preProcessDataFromDB(session):
+def preProcessDataFromDB(session, limit_records=10000):
     """
-    این متد داده‌ها را از دیتابیس می‌خواند، پردازش اولیه روی آن‌ها انجام می‌دهد،
-    داده‌های گمشده را پر می‌کند، داده‌های اسمی را کدگذاری کرده و در نهایت مجموعه داده را
-    به دو بخش آموزشی و آزمایشی تقسیم کرده و با SMOTE مجموعه آموزشی را متعادل می‌کند.
+    این متد داده‌ها را از دیتابیس می‌خواند، تعداد رکوردها را محدود می‌کند،
+    مقدارهای `status` را به `0` و `1` تبدیل می‌کند، داده‌های گمشده را پر می‌کند،
+    داده‌های اسمی را کدگذاری کرده و در نهایت مجموعه داده را آماده‌سازی می‌کند.
     """
 
-    # دریافت داده از دیتابیس و تبدیل آن به DataFrame
-    loans = session.query(ParsianLoan).all()
+    # دریافت تعداد محدود‌شده رکوردها از دیتابیس
+    loans = session.query(ParsianLoan).limit(limit_records).all()
     df = pd.DataFrame([loan.__dict__ for loan in loans])
     df.drop(columns=["_sa_instance_state"], inplace=True)
 
-    print("ستون‌های دیتافریم:", df.columns.tolist())  # نمایش ستون‌های دیتافریم
+    print(f"✅ {len(df)} رکورد از دیتابیس دریافت شد.")
 
-    # بررسی مقدارهای `status`
-    print("مقدارهای یکتای ستون `status`:")
-    print(df['status'].value_counts())
+    # انتخاب `status` به عنوان برچسب نکول
+    label_column = 'status'
 
-    # تبدیل `status` به مقدار عددی (نکول = ۱، بقیه = ۰)
-    df['status'] = df['status'].apply(lambda x: 1 if x.lower() == "defaulted" else 0)
+    if label_column not in df.columns:
+        raise ValueError(f"ستون '{label_column}' در داده وجود ندارد. لطفاً نام صحیح ستون برچسب را مشخص کنید.")
 
-    # جدا کردن ویژگی‌ها (X) و برچسب (y)
-    X = df.drop(['status'], axis=1)
-    y = df['status']
+    print(f"ستون برچسب انتخاب شده: {label_column}")
 
-    print("تعداد برچسب‌های نکول و غیرنکول:")
-    print(y.value_counts())  # نمایش تعداد نمونه‌های هر کلاس
+    # نمایش مقدارهای `status`
+    print("مقدارهای `status` قبل از تبدیل:")
+    print(df[label_column].value_counts())
 
-    # شناسایی ستون‌های عددی
-    numeric_columns = X.select_dtypes(include=['int64', 'float64', 'int', 'float']).columns
+    # تعریف وضعیت‌های نکول‌شده (`1`) و غیر نکول (`0`)
+    default_statuses = ['مشكوك الوصول', 'معوق', 'سررسيد گذشته']
 
-    # پر کردن داده‌های گمشده در ستون‌های عددی با میانگین
-    imputer = SimpleImputer(strategy='mean')
-    X[numeric_columns] = imputer.fit_transform(X[numeric_columns])
+    df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
 
-    # تقسیم داده‌ها به آموزش و تست
+    # نمایش تعداد نمونه‌های نکول و غیرنکول
+    print("تعداد برچسب‌های نکول و غیرنکول پس از تبدیل:")
+    print(df[label_column].value_counts())
+
+    # جدا کردن `X` و `y`
+    X = df.drop([label_column], axis=1)
+    y = df[label_column]
+
+    # تقسیم داده‌ها به مجموعه‌ی آموزشی و تست
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # اعمال SMOTE برای متعادل‌سازی کلاس‌های نکول و غیرنکول
-    sm = SMOTE(random_state=42)
-    X_train_res, y_train_res = sm.fit_resample(X_train, y_train)
-
-    return X_train_res, y_train_res, X_test, y_test
-
+    return X_train, y_train, X_test, y_test
 
 
 # این تابع، کل پروسه پیش‌پردازش شامل پاکسازی مقادیر گمشده، حذف ویژگی‌های نامناسب و اعمال SMOTE را انجام می‌دهد
