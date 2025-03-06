@@ -223,8 +223,13 @@ if __name__ == "__main__":
     # az λPN_arr_test, λNP_arr_test به عنوان وردی تابع هدف استفاده میکنیم
 
     # مرحله چهارم: استفاده از NSGA-II برای یافتن بهینه u و v
+    # ورودی های تایع احتمال نکول داده های تست
+    # ضرر این که به کسی وام ندیم
+    # ضرر این که پول مون و سودشو نده
     best_u, best_v = nsga2_find_uv(p_pred_test, λPN_arr_test, λNP_arr_test,
                                    population_size=20, generations=10)
+
+    # استانه ها U - V هستند
 
     # مرحله پنجم: اعمال تصمیم سه‌طرفه با استفاده از آستانه‌های به‌دست آمده
     twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, λPN_arr_test, λNP_arr_test,
