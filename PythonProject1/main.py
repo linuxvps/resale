@@ -1,7 +1,7 @@
 import random
+
 import numpy as np
 import pandas as pd
-from imblearn.over_sampling import SMOTE
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import (
     ExtraTreesClassifier,
@@ -9,84 +9,25 @@ from sklearn.ensemble import (
     GradientBoostingClassifier,
     AdaBoostClassifier
 )
-from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, confusion_matrix
-from sklearn.model_selection import train_test_split, KFold
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from xgboost import XGBClassifier
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import LabelEncoder
-from ParsianLoan import ParsianLoan
+from xgboost import XGBClassifier
 
-# ------------------------ اتصال به دیتابیس ------------------------
-DATABASE_URL = "mysql+pymysql://root:pass@localhost:3306/ln"
-engine = create_engine(DATABASE_URL, echo=True)
-SessionLocal = sessionmaker(bind=engine)
-session = SessionLocal()
+from dataHandler.LoanDataHandler import LoanDataHandler
+from processor.LoanPreprocessor import LoanPreprocessor
+from repository.LoanRepository import LoanRepository
 
 
-# ------------------------ تبدیل نوع داده‌ها ------------------------
-def convert_dataframe_columns(df):
-    """
-    تمام ستون‌های DataFrame را بررسی می‌کند؛ اگر ستون به نوع datetime باشد، آن را به تعداد روزهای سپری‌شده از تاریخ مرجع (2000-01-01) تبدیل می‌کند.
-    اگر ستون دارای نوع object باشد، ابتدا تلاش می‌کند آن را به عدد تبدیل کند؛ در صورت عدم موفقیت، از LabelEncoder برای تبدیل داده‌های دسته‌بندی استفاده می‌کند.
-    """
-    for col in df.columns:
-        # تبدیل ستون‌های تاریخ به تعداد روزها
-        if np.issubdtype(df[col].dtype, np.datetime64):
-            df[col] = (pd.to_datetime(df[col]) - pd.Timestamp("2000-01-01")).dt.days
-        elif df[col].dtype == 'object':
-            try:
-                # تلاش برای تبدیل به عدد؛ در صورت موفقیت، مقدارهای قابل تبدیل باقی می‌مانند
-                df[col] = pd.to_numeric(df[col])
-            except Exception:
-                # در صورت عدم موفقیت، از LabelEncoder استفاده می‌کنیم
-                le = LabelEncoder()
-                df[col] = le.fit_transform(df[col].astype(str))
-    return df
 
 
 # ------------------------ توابع پیش‌پردازش داده ------------------------
-def preProcessDataFromDB(session, limit_records=10000):
-    """
-    داده‌ها را از دیتابیس می‌خواند، رکوردها را محدود می‌کند، ستون 'status' را به 0 و 1 تبدیل می‌کند،
-    ابتدا تمامی ستون‌ها را به داده‌های عددی تبدیل می‌کند (با convert_dataframe_columns) و سپس
-    داده‌های گمشده را با میانگین پر می‌کند.
-    در نهایت، داده‌ها به مجموعه‌های آموزشی و تست تقسیم می‌شوند.
-    """
-    loans = session.query(ParsianLoan).limit(limit_records).all()
-    df = pd.DataFrame([loan.__dict__ for loan in loans])
-    df.drop(columns=["_sa_instance_state"], inplace=True)
-    print(f"✅ {len(df)} رکورد از دیتابیس دریافت شد.")
-
-    label_column = 'status'
-    if label_column not in df.columns:
-        raise ValueError(f"ستون '{label_column}' در داده وجود ندارد. لطفاً نام صحیح ستون برچسب را مشخص کنید.")
-    print(f"ستون برچسب انتخاب شده: {label_column}")
-    print("مقدارهای `status` قبل از تبدیل:")
-    print(df[label_column].value_counts())
-
-    default_statuses = ['مشكوك الوصول', 'معوق', 'سررسيد گذشته']
-    df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
-    print("تعداد برچسب‌های نکول و غیرنکول پس از تبدیل:")
-    print(df[label_column].value_counts())
-
-    # ابتدا ستون‌های غیرعددی را به داده‌های عددی تبدیل می‌کنیم
-    # ابتدا تمامی ستون‌های غیرعددی را به داده‌های عددی تبدیل می‌کنیم
-    df_converted = convert_dataframe_columns(df)
-    df_converted = df_converted.drop(columns=['create_date'], errors='ignore')
-
-    # سپس مقادیر گمشده را با میانگین پر می‌کنیم (تمام ستون‌ها اکنون عددی هستند)
-    imputer = SimpleImputer(strategy='mean')
-    df_imputed = pd.DataFrame(imputer.fit_transform(df_converted), columns=df_converted.columns)
-
-    # جدا کردن X و y
-    X = df_imputed.drop([label_column], axis=1)
-    y = df_imputed[label_column]
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    return X_train, y_train, X_test, y_test
+def preProcessDataFromDB():
+    repository = LoanRepository()  # نیازی به پارامتر ندارد ✅
+    preprocessor = LoanPreprocessor(imputation_strategy="median")
+    data_handler = LoanDataHandler(repository, preprocessor)
+    return data_handler.load_and_process_data(limit_records=5000)
 
 # ------------------------ توابع مدل LightGBM ------------------------
 def trainLightGBMModel(X_train, y_train, X_test):
@@ -281,7 +222,7 @@ def predictStacking(X_test, base_models, meta_model):
 # ------------------------ بخش اصلی (Main) ------------------------
 if __name__ == "__main__":
     # مرحله اول: دریافت و پیش‌پردازش داده‌ها از دیتابیس
-    X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB(session)
+    X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
 
     # استفاده از اطلاعات جریان نقدی واقعی موجود در X_test؛ فرض بر این است که ستون‌های 'approval_amount' و 'interest_amount' موجودند.
     data_test_cashflow = X_test[['approval_amount', 'interest_amount']]
