@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # مرحله سوم: محاسبه ضررهای پایه PN و NP بر اساس اطلاعات جریان نقدی
     λPN_arr_test, λNP_arr_test = computeLosses(data_test_cashflow)
 
-
+    # az λPN_arr_test, λNP_arr_test به عنوان وردی تابع هدف استفاده میکنیم
 
     # مرحله چهارم: استفاده از NSGA-II برای یافتن بهینه u و v
     best_u, best_v = nsga2_find_uv(p_pred_test, λPN_arr_test, λNP_arr_test,
