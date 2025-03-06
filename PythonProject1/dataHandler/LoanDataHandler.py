@@ -22,11 +22,11 @@ class LoanDataHandler:
         """
         دریافت داده‌ها از دیتابیس، پردازش و تقسیم آن‌ها به مجموعه‌های آموزش و تست.
         :param limit_records: حداکثر تعداد رکوردها برای پردازش
-        :return: مجموعه‌های آموزشی و تست (X_train, y_train, X_test, y_test)
+        :return: مجموعه‌های آموزشی و تست (x_train, y_train, x_test, y_test)
         """
         df = self.repository.fetch_loans(limit_records)
-        X, y = self.preprocessor.preprocess(df)
+        x, y = self.preprocessor.preprocess(df)
 
         # تقسیم داده‌ها به آموزش و تست
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        return X_train, y_train, X_test, y_test
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+        return x_train, y_train, x_test, y_test

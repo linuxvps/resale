@@ -1,7 +1,6 @@
 import random
 
 import numpy as np
-import pandas as pd
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import (
     ExtraTreesClassifier,
@@ -12,14 +11,11 @@ from sklearn.ensemble import (
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, confusion_matrix
 from sklearn.model_selection import KFold
-from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 
 from dataHandler.LoanDataHandler import LoanDataHandler
 from processor.LoanPreprocessor import LoanPreprocessor
 from repository.LoanRepository import LoanRepository
-
-
 
 
 # ------------------------ توابع پیش‌پردازش داده ------------------------
@@ -30,7 +26,7 @@ def preProcessDataFromDB():
     return data_handler.load_and_process_data(limit_records=5000)
 
 # ------------------------ توابع مدل LightGBM ------------------------
-def trainLightGBMModel(X_train, y_train, X_test):
+def trainLGBMModel(X_train, y_train, X_test):
     """
     مدل LightGBM را با داده‌های آموزشی آموزش می‌دهد و سپس برای داده‌های تست،
     احتمال پیش‌فرض (یعنی احتمال نکول) را محاسبه و خروجی می‌دهد.
@@ -224,14 +220,16 @@ if __name__ == "__main__":
     # مرحله اول: دریافت و پیش‌پردازش داده‌ها از دیتابیس
     X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
 
+    # مرحله دوم: آموزش مدل LightGBM و گرفتن احتمال پیش‌فرض برای داده‌های تست
+    p_pred_test, lgbm_model = trainLGBMModel(X_train_res, y_train_res, X_test)
+
     # استفاده از اطلاعات جریان نقدی واقعی موجود در X_test؛ فرض بر این است که ستون‌های 'approval_amount' و 'interest_amount' موجودند.
     data_test_cashflow = X_test[['approval_amount', 'interest_amount']]
 
-    # مرحله دوم: آموزش مدل LightGBM و گرفتن احتمال پیش‌فرض برای داده‌های تست
-    p_pred_test, lgbm_model = trainLightGBMModel(X_train_res, y_train_res, X_test)
-
     # مرحله سوم: محاسبه ضررهای پایه PN و NP بر اساس اطلاعات جریان نقدی
     lambdaPN_arr_test, lambdaNP_arr_test = computeLosses(data_test_cashflow)
+
+
 
     # مرحله چهارم: استفاده از NSGA-II برای یافتن بهینه u و v
     best_u, best_v = nsga2_find_uv(p_pred_test, lambdaPN_arr_test, lambdaNP_arr_test,
