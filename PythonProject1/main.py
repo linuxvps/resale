@@ -17,6 +17,7 @@ from dataHandler.LoanDataHandler import LoanDataHandler
 from processor.LoanPreprocessor import LoanPreprocessor
 from repository.LoanRepository import LoanRepository
 
+# λ ضرر مالی
 
 # ------------------------ توابع پیش‌پردازش داده ------------------------
 def preProcessDataFromDB():
@@ -48,27 +49,17 @@ def computeLosses(cash_flow_info):
     """
     principal = cash_flow_info['approval_amount'].values
     interest = cash_flow_info['interest_amount'].values
-    lambdaPN_arr = []
-    lambdaNP_arr = []
+    λPN_arr = []
+    λNP_arr = []
     for i in range(len(principal)):
         pn_val = interest[i]
         np_val = principal[i] + interest[i]
-        lambdaPN_arr.append(pn_val)
-        lambdaNP_arr.append(np_val)
-    return np.array(lambdaPN_arr), np.array(lambdaNP_arr)
-
-
-def delayedLosses(lambdaPN_arr, lambdaNP_arr, u, v):
-    """
-    طبق مقاله: ضرر تأخیردار برابر است با λ_BP = u * λ_NP و λ_BN = v * λ_PN.
-    """
-    lambdaBP_arr = u * lambdaNP_arr
-    lambdaBN_arr = v * lambdaPN_arr
-    return lambdaBP_arr, lambdaBN_arr
-
+        λPN_arr.append(pn_val)
+        λNP_arr.append(np_val)
+    return np.array(λPN_arr), np.array(λNP_arr)
 
 # ------------------------ توابع محاسبه تابع هدف و NSGA-II ------------------------
-def computeObjective(u, v, p_pred, lambdaPN_arr, lambdaNP_arr):
+def computeObjective(u, v, p_pred, λPN_arr, λNP_arr):
     """
     برای هر نمونه آستانه‌های α و β را محاسبه کرده و هزینه تصمیم‌گیری و اندازه ناحیه مرزی را برمی‌گرداند.
     هدف: کمینه کردن مجموع هزینه تصمیم و اندازه ناحیه مرزی.
@@ -76,8 +67,8 @@ def computeObjective(u, v, p_pred, lambdaPN_arr, lambdaNP_arr):
     cost_total = 0.0
     boundary_sum = 0.0
     for i in range(len(p_pred)):
-        pn = lambdaPN_arr[i]
-        np_ = lambdaNP_arr[i]
+        pn = λPN_arr[i]
+        np_ = λNP_arr[i]
         bp = u * np_
         bn = v * pn
         numerator_alpha = (pn - bn)
@@ -98,7 +89,7 @@ def computeObjective(u, v, p_pred, lambdaPN_arr, lambdaNP_arr):
     return cost_total, boundary_sum
 
 
-def nsga2_find_uv(p_pred, lambdaPN_arr, lambdaNP_arr, population_size=30, generations=20):
+def nsga2_find_uv(p_pred, λPN_arr, λNP_arr, population_size=30, generations=20):
     """
     پیاده‌سازی ساده NSGA-II جهت یافتن مقادیر بهینه u و v که تابع هدف (هزینه کلی و اندازه ناحیه مرزی) را کمینه کند.
     """
@@ -113,7 +104,7 @@ def nsga2_find_uv(p_pred, lambdaPN_arr, lambdaNP_arr, population_size=30, genera
     for gen in range(generations):
         evaluated_pop = []
         for (u, v) in population:
-            cost_val, boundary_val = computeObjective(u, v, p_pred, lambdaPN_arr, lambdaNP_arr)
+            cost_val, boundary_val = computeObjective(u, v, p_pred, λPN_arr, λNP_arr)
             evaluated_pop.append((u, v, cost_val, boundary_val))
         evaluated_pop.sort(key=lambda x: (x[2], x[3]))
         top_half = evaluated_pop[:population_size // 2]
@@ -138,7 +129,7 @@ def nsga2_find_uv(p_pred, lambdaPN_arr, lambdaNP_arr, population_size=30, genera
     best_bound = float('inf')
     best_uv = (0, 0)
     for (u, v) in population:
-        cost_val, boundary_val = computeObjective(u, v, p_pred, lambdaPN_arr, lambdaNP_arr)
+        cost_val, boundary_val = computeObjective(u, v, p_pred, λPN_arr, λNP_arr)
         if cost_val < best_val:
             best_val = cost_val
             best_bound = boundary_val
@@ -149,7 +140,7 @@ def nsga2_find_uv(p_pred, lambdaPN_arr, lambdaNP_arr, population_size=30, genera
     return best_uv
 
 
-def applyThreeWayDecision(p_pred, lambdaPN_arr, lambdaNP_arr, u, v):
+def applyThreeWayDecision(p_pred, λPN_arr, λNP_arr, u, v):
     """
     بر اساس مقادیر u و v، آستانه‌های سه‌طرفه (α و β) محاسبه شده و بر اساس آن‌ها:
     - اگر p >= α: برچسب ۱ (پذیرش/نکول)
@@ -161,8 +152,8 @@ def applyThreeWayDecision(p_pred, lambdaPN_arr, lambdaNP_arr, u, v):
     boundary_indices = []
     for i in range(len(p_pred)):
         p_val = p_pred[i]
-        pn = lambdaPN_arr[i]
-        np_ = lambdaNP_arr[i]
+        pn = λPN_arr[i]
+        np_ = λNP_arr[i]
         bp = u * np_
         bn = v * pn
         numerator_alpha = (pn - bn)
@@ -227,16 +218,16 @@ if __name__ == "__main__":
     data_test_cashflow = X_test[['approval_amount', 'interest_amount']]
 
     # مرحله سوم: محاسبه ضررهای پایه PN و NP بر اساس اطلاعات جریان نقدی
-    lambdaPN_arr_test, lambdaNP_arr_test = computeLosses(data_test_cashflow)
+    λPN_arr_test, λNP_arr_test = computeLosses(data_test_cashflow)
 
 
 
     # مرحله چهارم: استفاده از NSGA-II برای یافتن بهینه u و v
-    best_u, best_v = nsga2_find_uv(p_pred_test, lambdaPN_arr_test, lambdaNP_arr_test,
+    best_u, best_v = nsga2_find_uv(p_pred_test, λPN_arr_test, λNP_arr_test,
                                    population_size=20, generations=10)
 
     # مرحله پنجم: اعمال تصمیم سه‌طرفه با استفاده از آستانه‌های به‌دست آمده
-    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, lambdaPN_arr_test, lambdaNP_arr_test,
+    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, λPN_arr_test, λNP_arr_test,
                                                          best_u, best_v)
 
     # جداکردن نمونه‌های مرزی برای تصمیم‌گیری نهایی
@@ -287,9 +278,9 @@ if __name__ == "__main__":
     twd_labels_arr = np.array(twd_labels)
     for i in range(len(y_test_arr)):
         if y_test_arr[i] == 1 and twd_labels_arr[i] == 0:
-            total_cost += lambdaNP_arr_test[i]
+            total_cost += λNP_arr_test[i]
         elif y_test_arr[i] == 0 and twd_labels_arr[i] == 1:
-            total_cost += lambdaPN_arr_test[i]
+            total_cost += λPN_arr_test[i]
 
     print("Balanced Accuracy:", balanced_acc)
     print("AUC:", auc_score)
