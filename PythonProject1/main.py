@@ -6,7 +6,6 @@ from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
     AdaBoostClassifier, VotingClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
 from xgboost import XGBClassifier
@@ -159,7 +158,6 @@ if __name__ == "__main__":
         ('ada', AdaBoostClassifier(n_estimators=100, random_state=0))
     ]
     # استفاده از VotingClassifier به صورت soft voting برای ترکیب مدل‌ها
-    from sklearn.ensemble import VotingClassifier
     voting_model = VotingClassifier(estimators=estimators, voting='soft')
     voting_model.fit(X_train_res, y_train_res)
 
