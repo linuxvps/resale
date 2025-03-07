@@ -5,7 +5,7 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
-    AdaBoostClassifier, StackingClassifier
+    AdaBoostClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
@@ -40,7 +40,7 @@ def computeLosses(cash_flow_info):
     # استفاده از عملگرهای وکتورایز برای محاسبه ضرر
     principal = cash_flow_info['approval_amount'].values
     interest = cash_flow_info['interest_amount'].values
-    lPN_arr = interest  # هزینه PN به صورت مستقیم
+    lPN_arr = interest           # هزینه PN به صورت مستقیم
     lNP_arr = principal + interest  # هزینه NP به صورت وکتور
     return lPN_arr, lNP_arr
 
@@ -51,7 +51,9 @@ class ObjectiveProblem(Problem):
         self.p_pred = p_pred
         self.lPN_arr = lPN_arr
         self.lNP_arr = lNP_arr
-        super().__init__(n_var=2, n_obj=2, n_constr=1, xl=np.array([0.0, 0.0]), xu=np.array([1.0, 1.0]))
+        super().__init__(n_var=2, n_obj=2, n_constr=1,
+                         xl=np.array([0.0, 0.0]),
+                         xu=np.array([1.0, 1.0]))
 
     def _evaluate(self, X, out, *args, **kwargs):
         n_ind = X.shape[0]
@@ -87,7 +89,7 @@ def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
     algorithm = NSGA2(pop_size=pop_size)
     res = minimize(problem, algorithm, ('n_gen', generations), seed=1, verbose=False)
     F = res.F
-    # استفاده از np.lexsort برای انتخاب بهترین جواب به صورت لکسیکوگرافی
+    # انتخاب بهترین جواب به صورت لکسیکوگرافی (ابتدا f1 سپس f2)
     idx = np.lexsort((F[:, 1], F[:, 0]))[0]
     return res.X[idx, 0], res.X[idx, 1]
 
@@ -116,7 +118,6 @@ def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
     f1 = f1_score(y_true, y_pred)
     cm = confusion_matrix(y_true, y_pred)
     report = classification_report(y_true, y_pred)
-    # محاسبه هزینه تصمیم به صورت وکتورایز
     cost_decision = np.sum(lNP_arr[(y_true == 1) & (y_pred == 0)]) + np.sum(lPN_arr[(y_true == 0) & (y_pred == 1)])
     print("Balanced Accuracy:", ba)
     print("AUC:", auc)
@@ -147,7 +148,8 @@ if __name__ == "__main__":
     # ۵. اعمال تصمیم سه‌طرفه
     twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, lPN_arr_test, lNP_arr_test, best_u, best_v)
 
-    # ۶. استفاده از StackingClassifier به جای پیاده‌سازی دستی استکینگ
+    # ۶. استفاده از VotingClassifier برای مدل بگینگ با چند مدل پایه
+    # تعریف مدل‌های پایه
     estimators = [
         ('lgb', LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=0)),
         ('rf', RandomForestClassifier(n_estimators=100, random_state=0)),
@@ -156,15 +158,15 @@ if __name__ == "__main__":
         ('et', ExtraTreesClassifier(n_estimators=100, random_state=0)),
         ('ada', AdaBoostClassifier(n_estimators=100, random_state=0))
     ]
-    meta_model = LogisticRegression()
-    stacking_model = StackingClassifier(estimators=estimators, final_estimator=meta_model, cv=5)
-    stacking_model.fit(X_train_res, y_train_res)
+    # استفاده از VotingClassifier به صورت soft voting برای ترکیب مدل‌ها
+    from sklearn.ensemble import VotingClassifier
+    voting_model = VotingClassifier(estimators=estimators, voting='soft')
+    voting_model.fit(X_train_res, y_train_res)
 
-    # ۷. پیش‌بینی نمونه‌های مرزی با مدل استکینگ
+    # ۷. پیش‌بینی نمونه‌های مرزی با مدل VotingClassifier
     X_test_boundary = X_test.iloc[boundary_indices]
-    y_pred_boundary = stacking_model.predict(X_test_boundary)
+    y_pred_boundary = voting_model.predict(X_test_boundary)
     twd_labels[boundary_indices] = y_pred_boundary
-
 
     # ۸. ارزیابی عملکرد کلی مدل
     evaluate_performance(np.array(y_test), np.array(twd_labels), lPN_arr_test, lNP_arr_test)
