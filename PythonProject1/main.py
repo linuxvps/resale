@@ -1,170 +1,131 @@
 import random
-
 import numpy as np
 from lightgbm import LGBMClassifier
-from sklearn.ensemble import (
-    ExtraTreesClassifier,
-    RandomForestClassifier,
-    GradientBoostingClassifier,
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
     AdaBoostClassifier
-)
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, confusion_matrix
 from sklearn.model_selection import KFold
 from xgboost import XGBClassifier
 
+# در pymoo نسخه‌های جدید مسیر NSGA-II تغییر کرده است
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.optimize import minimize
+
 from dataHandler.LoanDataHandler import LoanDataHandler
 from processor.LoanPreprocessor import LoanPreprocessor
 from repository.LoanRepository import LoanRepository
 
-# λ ضرر مالی
 
-# ------------------------ توابع پیش‌پردازش داده ------------------------
+# تابع پیش‌پردازش داده از دیتابیس
 def preProcessDataFromDB():
-    repository = LoanRepository()  # نیازی به پارامتر ندارد ✅
+    repository = LoanRepository()
     preprocessor = LoanPreprocessor(imputation_strategy="median")
     data_handler = LoanDataHandler(repository, preprocessor)
     return data_handler.load_and_process_data(limit_records=5000)
 
-# ------------------------ توابع مدل LightGBM ------------------------
+
+# آموزش مدل LightGBM و دریافت احتمال نکول
 def trainLGBMModel(X_train, y_train, X_test):
-    """
-    مدل LightGBM را با داده‌های آموزشی آموزش می‌دهد و سپس برای داده‌های تست،
-    احتمال پیش‌فرض (یعنی احتمال نکول) را محاسبه و خروجی می‌دهد.
-    """
     lgbm = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42)
-    print("قبل از آموزش مدل، نوع داده‌های X_train:")
-    print(X_train.dtypes)
     lgbm.fit(X_train, y_train)
-    print("بعد از آموزش مدل.")
     p_pred = lgbm.predict_proba(X_test)[:, 1]
     return p_pred, lgbm
 
 
-# ------------------------ توابع محاسبه ضرر ------------------------
+# محاسبه ضررهای مالی از اطلاعات جریان نقدی
 def computeLosses(cash_flow_info):
-    """
-    براساس اطلاعات جریان نقدی، ضرر PN (سود از دست رفته) و ضرر NP (اصل + سود) را محاسبه می‌کند.
-    در این مثال، ستون‌های 'approval_amount' و 'interest_amount' به ترتیب نقش اصل و سود را دارند.
-    """
     principal = cash_flow_info['approval_amount'].values
     interest = cash_flow_info['interest_amount'].values
-    λPN_arr = []
-    λNP_arr = []
-    for i in range(len(principal)):
-        pn_val = interest[i]
-        np_val = principal[i] + interest[i]
-        λPN_arr.append(pn_val)
-        λNP_arr.append(np_val)
-    return np.array(λPN_arr), np.array(λNP_arr)
-
-# ------------------------ توابع محاسبه تابع هدف و NSGA-II ------------------------
-def computeObjective(u, v, p_pred, λPN_arr, λNP_arr):
-    """
-    برای هر نمونه آستانه‌های α و β را محاسبه کرده و هزینه تصمیم‌گیری و اندازه ناحیه مرزی را برمی‌گرداند.
-    هدف: کمینه کردن مجموع هزینه تصمیم و اندازه ناحیه مرزی.
-    """
-    cost_total = 0.0
-    boundary_sum = 0.0
-    for i in range(len(p_pred)):
-        pn = λPN_arr[i]
-        np_ = λNP_arr[i]
-        bp = u * np_
-        bn = v * pn
-        numerator_alpha = (pn - bn)
-        denominator_alpha = numerator_alpha + (bp - 0)
-        alpha_i = 1.0 if denominator_alpha == 0 else numerator_alpha / denominator_alpha
-        numerator_beta = bn
-        denominator_beta = bn + (np_ - bp)
-        beta_i = 0.0 if denominator_beta == 0 else numerator_beta / denominator_beta
-        p_val = p_pred[i]
-        if p_val >= alpha_i:
-            cost_local = pn * (1 - p_val)
-        elif p_val <= beta_i:
-            cost_local = np_ * p_val
-        else:
-            cost_local = (bp * p_val) + (bn * (1 - p_val))
-        cost_total += cost_local
-        boundary_sum += (alpha_i - beta_i)
-    return cost_total, boundary_sum
+    lPN_arr = [interest[i] for i in range(len(principal))]
+    lNP_arr = [principal[i] + interest[i] for i in range(len(principal))]
+    return np.array(lPN_arr), np.array(lNP_arr)
 
 
-def nsga2_find_uv(p_pred, λPN_arr, λNP_arr, population_size=30, generations=20):
-    """
-    پیاده‌سازی ساده NSGA-II جهت یافتن مقادیر بهینه u و v که تابع هدف (هزینه کلی و اندازه ناحیه مرزی) را کمینه کند.
-    """
-    population = []
-    for _ in range(population_size):
-        u = random.uniform(0, 1)
-        v = random.uniform(0, 1)
-        if u + v > 1:
-            v = 1 - u
-        population.append((u, v))
+# تعریف تابع هدف بهینه‌سازی با pymoo (NSGA-II)
+class ObjectiveProblem(Problem):
+    def __init__(self, p_pred, lPN_arr, lNP_arr):
+        self.p_pred = p_pred
+        self.lPN_arr = lPN_arr
+        self.lNP_arr = lNP_arr
+        super().__init__(n_var=2, n_obj=2, n_constr=1, xl=np.array([0, 0]), xu=np.array([1, 1]))
 
-    for gen in range(generations):
-        evaluated_pop = []
-        for (u, v) in population:
-            cost_val, boundary_val = computeObjective(u, v, p_pred, λPN_arr, λNP_arr)
-            evaluated_pop.append((u, v, cost_val, boundary_val))
-        evaluated_pop.sort(key=lambda x: (x[2], x[3]))
-        top_half = evaluated_pop[:population_size // 2]
-        new_population = []
-        for (u, v, cost_val, bd_val) in top_half:
-            u_new = u + random.uniform(-0.01, 0.01)
-            v_new = v + random.uniform(-0.01, 0.01)
-            u_new = max(u_new, 0)
-            v_new = max(v_new, 0)
-            if u_new + v_new > 1:
-                v_new = 1 - u_new
-            new_population.append((u_new, v_new))
-        population = new_population
-        while len(population) < population_size:
-            ru = random.uniform(0, 1)
-            rv = random.uniform(0, 1)
-            if ru + rv > 1:
-                rv = 1 - ru
-            population.append((ru, rv))
-
-    best_val = float('inf')
-    best_bound = float('inf')
-    best_uv = (0, 0)
-    for (u, v) in population:
-        cost_val, boundary_val = computeObjective(u, v, p_pred, λPN_arr, λNP_arr)
-        if cost_val < best_val:
-            best_val = cost_val
-            best_bound = boundary_val
-            best_uv = (u, v)
-        elif abs(cost_val - best_val) < 1e-9 and boundary_val < best_bound:
-            best_uv = (u, v)
-            best_bound = boundary_val
-    return best_uv
+    def _evaluate(self, X, out, *args, **kwargs):
+        n_ind = X.shape[0]
+        f1 = np.zeros(n_ind)  # هزینه تصمیم
+        f2 = np.zeros(n_ind)  # اندازه ناحیه مرزی
+        for i in range(n_ind):
+            u = X[i, 0]
+            v = X[i, 1]
+            cost_total = 0.0
+            boundary_sum = 0.0
+            for j in range(len(self.p_pred)):
+                pn = self.lPN_arr[j]
+                np_val = self.lNP_arr[j]
+                bp = u * np_val
+                bn = v * pn
+                numerator_alpha = pn - bn
+                denominator_alpha = numerator_alpha + bp
+                alpha = 1.0 if denominator_alpha == 0 else numerator_alpha / denominator_alpha
+                numerator_beta = bn
+                denominator_beta = bn + (np_val - bp)
+                beta = 0.0 if denominator_beta == 0 else numerator_beta / denominator_beta
+                p_val = self.p_pred[j]
+                if p_val >= alpha:
+                    cost_local = pn * (1 - p_val)
+                elif p_val <= beta:
+                    cost_local = np_val * p_val
+                else:
+                    cost_local = bp * p_val + bn * (1 - p_val)
+                cost_total += cost_local
+                boundary_sum += (alpha - beta)
+            f1[i] = cost_total
+            f2[i] = boundary_sum
+        # قید: u + v <= 1
+        g = X[:, 0] + X[:, 1] - 1.0
+        out["F"] = np.column_stack([f1, f2])
+        out["G"] = g.reshape(-1, 1)
 
 
-def applyThreeWayDecision(p_pred, λPN_arr, λNP_arr, u, v):
-    """
-    بر اساس مقادیر u و v، آستانه‌های سه‌طرفه (α و β) محاسبه شده و بر اساس آن‌ها:
-    - اگر p >= α: برچسب ۱ (پذیرش/نکول)
-    - اگر p <= β: برچسب ۰ (رد/غیر نکول)
-    - در غیر این صورت: برچسب -1 (ناحیه مرزی)
-    همچنین اندیس نمونه‌های مرزی جمع‌آوری می‌شود.
-    """
+# بهینه‌سازی u و v با استفاده از NSGA-II در pymoo
+def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
+    problem = ObjectiveProblem(p_pred, lPN_arr, lNP_arr)
+    algorithm = NSGA2(pop_size=pop_size)
+    termination = ('n_gen', generations)
+    res = minimize(problem, algorithm, termination, seed=1, verbose=False)
+    F = res.F
+    # انتخاب بهترین جواب بر اساس کمینه‌سازی f1 و در صورت تساوی، f2
+    best_idx = 0
+    best_f1 = F[0, 0]
+    best_f2 = F[0, 1]
+    for i in range(len(F)):
+        if F[i, 0] < best_f1 or (abs(F[i, 0] - best_f1) < 1e-9 and F[i, 1] < best_f2):
+            best_f1 = F[i, 0]
+            best_f2 = F[i, 1]
+            best_idx = i
+    return res.X[best_idx, 0], res.X[best_idx, 1]
+
+
+# اعمال تصمیم سه‌طرفه بر اساس آستانه‌های به‌دست آمده
+def applyThreeWayDecision(p_pred, lPN_arr, lNP_arr, u, v):
     labels = []
     boundary_indices = []
     for i in range(len(p_pred)):
         p_val = p_pred[i]
-        pn = λPN_arr[i]
-        np_ = λNP_arr[i]
-        bp = u * np_
+        pn = lPN_arr[i]
+        np_val = lNP_arr[i]
+        bp = u * np_val
         bn = v * pn
-        numerator_alpha = (pn - bn)
-        denominator_alpha = numerator_alpha + (bp - 0)
-        alpha_i = 1.0 if denominator_alpha == 0 else numerator_alpha / denominator_alpha
+        numerator_alpha = pn - bn
+        denominator_alpha = numerator_alpha + bp
+        alpha = 1.0 if denominator_alpha == 0 else numerator_alpha / denominator_alpha
         numerator_beta = bn
-        denominator_beta = bn + (np_ - bp)
-        beta_i = 0.0 if denominator_beta == 0 else numerator_beta / denominator_beta
-        if p_val >= alpha_i:
+        denominator_beta = bn + (np_val - bp)
+        beta = 0.0 if denominator_beta == 0 else numerator_beta / denominator_beta
+        if p_val >= alpha:
             labels.append(1)
-        elif p_val <= beta_i:
+        elif p_val <= beta:
             labels.append(0)
         else:
             labels.append(-1)
@@ -172,13 +133,8 @@ def applyThreeWayDecision(p_pred, λPN_arr, λNP_arr, u, v):
     return np.array(labels), boundary_indices
 
 
-# ------------------------ توابع مدل استکینگ ------------------------
+# آموزش مدل استکینگ برای نمونه‌های مرزی
 def trainStacking(X_train, y_train, base_models, meta_model):
-    """
-    مدل استکینگ ساده:
-    - در لایه اول، چند مدل پایه با استفاده از KFold آموزش داده می‌شوند.
-    - خروجی‌های احتمال پیش‌بینی این مدل‌ها به عنوان ویژگی ورودی برای آموزش مدل متا استفاده می‌شود.
-    """
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     level_one_output = np.zeros((len(X_train), len(base_models)))
     X_arr = np.array(X_train)
@@ -195,51 +151,29 @@ def trainStacking(X_train, y_train, base_models, meta_model):
 
 
 def predictStacking(X_test, base_models, meta_model):
-    """
-    برای داده‌های جدید X_test، خروجی هر مدل پایه محاسبه شده و سپس مدل متا بر اساس آن‌ها
-    برچسب نهایی را پیش‌بینی می‌کند.
-    """
     base_preds = np.zeros((len(X_test), len(base_models)))
     for idx, model in enumerate(base_models):
         base_preds[:, idx] = model.predict_proba(X_test)[:, 1]
-    final_preds = meta_model.predict(base_preds)
-    return final_preds
+    return meta_model.predict(base_preds)
 
 
-# ------------------------ بخش اصلی (Main) ------------------------
+# اجرای کل فرآیند در یک اسکریپت
 if __name__ == "__main__":
-    # مرحله اول: دریافت و پیش‌پردازش داده‌ها از دیتابیس
+    # دریافت و پیش‌پردازش داده
     X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
-
-    # مرحله دوم: آموزش مدل LightGBM و گرفتن احتمال پیش‌فرض برای داده‌های تست
-    p_pred_test, lgbm_model = trainLGBMModel(X_train_res, y_train_res, X_test)
-
-    # استفاده از اطلاعات جریان نقدی واقعی موجود در X_test؛ فرض بر این است که ستون‌های 'approval_amount' و 'interest_amount' موجودند.
-    data_test_cashflow = X_test[['approval_amount', 'interest_amount']]
-
-    # مرحله سوم: محاسبه ضررهای پایه PN و NP بر اساس اطلاعات جریان نقدی
-    λPN_arr_test, λNP_arr_test = computeLosses(data_test_cashflow)
-
-    # az λPN_arr_test, λNP_arr_test به عنوان وردی تابع هدف استفاده میکنیم
-
-    # مرحله چهارم: استفاده از NSGA-II برای یافتن بهینه u و v
-    # ورودی های تایع احتمال نکول داده های تست
-    # ضرر این که به کسی وام ندیم
-    # ضرر این که پول مون و سودشو نده
-    best_u, best_v = nsga2_find_uv(p_pred_test, λPN_arr_test, λNP_arr_test,
-                                   population_size=20, generations=10)
-
-    # استانه ها U - V هستند
-
-    # مرحله پنجم: اعمال تصمیم سه‌طرفه با استفاده از آستانه‌های به‌دست آمده
-    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, λPN_arr_test, λNP_arr_test,
-                                                         best_u, best_v)
-
-    # جداکردن نمونه‌های مرزی برای تصمیم‌گیری نهایی
+    # آموزش مدل LightGBM و دریافت احتمال نکول
+    p_pred_test, _ = trainLGBMModel(X_train_res, y_train_res, X_test)
+    # محاسبه ضررهای مالی از اطلاعات جریان نقدی
+    cash_flow = X_test[['approval_amount', 'interest_amount']]
+    lPN_arr_test, lNP_arr_test = computeLosses(cash_flow)
+    # بهینه‌سازی u و v با pymoo
+    best_u, best_v = nsga2_find_uv(p_pred_test, lPN_arr_test, lNP_arr_test, pop_size=20, generations=10)
+    # اعمال تصمیم سه‌طرفه بر اساس آستانه‌های به‌دست آمده
+    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, lPN_arr_test, lNP_arr_test, best_u, best_v)
+    # استخراج نمونه‌های مرزی
     X_test_boundary = X_test.iloc[boundary_indices]
     y_test_boundary = y_test.iloc[boundary_indices]
-
-    # مرحله ششم: آموزش مدل استکینگ برای نمونه‌های مرزی
+    # آموزش استکینگ برای نمونه‌های مرزی
     base_models = [
         LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=0),
         RandomForestClassifier(n_estimators=100, random_state=0),
@@ -249,44 +183,32 @@ if __name__ == "__main__":
         AdaBoostClassifier(n_estimators=100, random_state=0)
     ]
     meta_model = LogisticRegression()
-    base_models_trained, meta_model_trained = trainStacking(X_train_res, y_train_res, base_models, meta_model)
-
-    # مرحله هفتم: پیش‌بینی نهایی برای نمونه‌های مرزی با استفاده از مدل استکینگ
-    y_pred_boundary = predictStacking(X_test_boundary, base_models_trained, meta_model_trained)
-
-    # جایگزینی برچسب نهایی نمونه‌های مرزی در آرایه تصمیم سه‌طرفه
+    base_models, meta_model = trainStacking(X_train_res, y_train_res, base_models, meta_model)
+    # پیش‌بینی نهایی برای نمونه‌های مرزی با مدل استکینگ
+    y_pred_boundary = predictStacking(X_test_boundary, base_models, meta_model)
     for i, idx in enumerate(boundary_indices):
         twd_labels[idx] = y_pred_boundary[i]
-
-    # مرحله هشتم: ارزیابی نهایی عملکرد مدل
+    # ارزیابی عملکرد نهایی
     cm = confusion_matrix(y_test, twd_labels)
     TN, FP, FN, TP = cm[0, 0], cm[0, 1], cm[1, 0], cm[1, 1]
-
     balanced_acc = 0
     if (TP + FP) != 0 and (TN + FN) != 0:
         balanced_acc = ((TP / (TP + FP)) + (TN / (TN + FN))) / 2.0
-
     auc_score = roc_auc_score(y_test, twd_labels)
-
     precision = TP / (TP + FP) if (TP + FP) != 0 else 0
     recall = TP / (TP + FN) if (TP + FN) != 0 else 0
     fmeasure = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
-
-    gmean = 0
-    if (TP + FN) != 0 and (TN + FP) != 0:
-        sensitivity = TP / (TP + FN)
-        specificity = TN / (TN + FP)
-        gmean = (sensitivity * specificity) ** 0.5
-
-    total_cost = 0.0
+    sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
+    specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
+    gmean = (sensitivity * specificity) ** 0.5
+    total_cost = 0
     y_test_arr = np.array(y_test)
     twd_labels_arr = np.array(twd_labels)
     for i in range(len(y_test_arr)):
         if y_test_arr[i] == 1 and twd_labels_arr[i] == 0:
-            total_cost += λNP_arr_test[i]
+            total_cost += lNP_arr_test[i]
         elif y_test_arr[i] == 0 and twd_labels_arr[i] == 1:
-            total_cost += λPN_arr_test[i]
-
+            total_cost += lPN_arr_test[i]
     print("Balanced Accuracy:", balanced_acc)
     print("AUC:", auc_score)
     print("F-Measure:", fmeasure)
