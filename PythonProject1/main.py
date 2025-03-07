@@ -107,6 +107,7 @@ def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
     return res.X[best_idx, 0], res.X[best_idx, 1]
 
 
+
 # اعمال تصمیم سه‌طرفه بر اساس آستانه‌های به‌دست آمده
 def applyThreeWayDecision(p_pred, lPN_arr, lNP_arr, u, v):
     labels = []
