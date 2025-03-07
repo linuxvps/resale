@@ -1,41 +1,59 @@
 import random
 import numpy as np
+
+# کتابخانه‌های مدل‌سازی و ارزیابی
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
     AdaBoostClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score, confusion_matrix
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, \
+    precision_score, recall_score, f1_score
 from sklearn.model_selection import KFold
 from xgboost import XGBClassifier
 
-# در pymoo نسخه‌های جدید مسیر NSGA-II تغییر کرده است
+# pymoo برای بهینه‌سازی NSGA-II
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.optimize import minimize
 
+# کتابخانه‌های مربوط به دریافت و پیش‌پردازش داده (کلاس‌های موجود در پروژه)
 from dataHandler.LoanDataHandler import LoanDataHandler
 from processor.LoanPreprocessor import LoanPreprocessor
 from repository.LoanRepository import LoanRepository
 
 
-# تابع پیش‌پردازش داده از دیتابیس
+# ------------------------ توابع پیش‌پردازش داده ------------------------
 def preProcessDataFromDB():
-    repository = LoanRepository()
+    """
+    دریافت و پیش‌پردازش داده‌ها از دیتابیس با استفاده از کلاس‌های موجود
+    """
+    repository = LoanRepository()  # نیازی به پارامتر ندارد
     preprocessor = LoanPreprocessor(imputation_strategy="median")
     data_handler = LoanDataHandler(repository, preprocessor)
     return data_handler.load_and_process_data(limit_records=5000)
 
 
-# آموزش مدل LightGBM و دریافت احتمال نکول
+# ------------------------ توابع مدل LightGBM ------------------------
 def trainLGBMModel(X_train, y_train, X_test):
+    """
+    آموزش مدل LightGBM و دریافت احتمال نکول برای داده‌های تست
+    """
     lgbm = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42)
+    print("شروع آموزش مدل LightGBM...")
     lgbm.fit(X_train, y_train)
+    print("آموزش مدل به پایان رسید.")
     p_pred = lgbm.predict_proba(X_test)[:, 1]
     return p_pred, lgbm
 
 
-# محاسبه ضررهای مالی از اطلاعات جریان نقدی
+# ------------------------ توابع محاسبه ضرر ------------------------
 def computeLosses(cash_flow_info):
+    """
+    محاسبه ضررهای مالی (PN و NP) بر اساس اطلاعات جریان نقدی؛
+    در این مثال:
+      - lPN_arr: هزینه PN (ضرر ناشی از نکول)
+      - lNP_arr: هزینه NP (ضرر ناشی از عدم پرداخت اصل + سود)
+    """
     principal = cash_flow_info['approval_amount'].values
     interest = cash_flow_info['interest_amount'].values
     lPN_arr = [interest[i] for i in range(len(principal))]
@@ -43,18 +61,23 @@ def computeLosses(cash_flow_info):
     return np.array(lPN_arr), np.array(lNP_arr)
 
 
-# تعریف تابع هدف بهینه‌سازی با pymoo (NSGA-II)
+# ------------------------ تعریف تابع هدف NSGA-II با pymoo ------------------------
 class ObjectiveProblem(Problem):
     def __init__(self, p_pred, lPN_arr, lNP_arr):
+        """
+        تعریف مسئله بهینه‌سازی با 2 متغیر (u, v)، 2 تابع هدف (هزینه تصمیم و اندازه ناحیه مرزی)
+        و یک قید (u + v <= 1)
+        """
         self.p_pred = p_pred
         self.lPN_arr = lPN_arr
         self.lNP_arr = lNP_arr
-        super().__init__(n_var=2, n_obj=2, n_constr=1, xl=np.array([0, 0]), xu=np.array([1, 1]))
+        super().__init__(n_var=2, n_obj=2, n_constr=1, xl=np.array([0.0, 0.0]), xu=np.array([1.0, 1.0]))
 
     def _evaluate(self, X, out, *args, **kwargs):
         n_ind = X.shape[0]
-        f1 = np.zeros(n_ind)  # هزینه تصمیم
+        f1 = np.zeros(n_ind)  # هزینه تصمیم‌گیری
         f2 = np.zeros(n_ind)  # اندازه ناحیه مرزی
+        # محاسبه اهداف برای هر فرد از جمعیت
         for i in range(n_ind):
             u = X[i, 0]
             v = X[i, 1]
@@ -82,20 +105,23 @@ class ObjectiveProblem(Problem):
                 boundary_sum += (alpha - beta)
             f1[i] = cost_total
             f2[i] = boundary_sum
-        # قید: u + v <= 1
+        # تعریف قید: u + v <= 1
         g = X[:, 0] + X[:, 1] - 1.0
         out["F"] = np.column_stack([f1, f2])
         out["G"] = g.reshape(-1, 1)
 
 
-# بهینه‌سازی u و v با استفاده از NSGA-II در pymoo
+# ------------------------ بهینه‌سازی u و v با استفاده از NSGA-II ------------------------
 def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
+    """
+    بهینه‌سازی u و v با استفاده از الگوریتم NSGA-II موجود در pymoo
+    """
     problem = ObjectiveProblem(p_pred, lPN_arr, lNP_arr)
     algorithm = NSGA2(pop_size=pop_size)
     termination = ('n_gen', generations)
     res = minimize(problem, algorithm, termination, seed=1, verbose=False)
     F = res.F
-    # انتخاب بهترین جواب بر اساس کمینه‌سازی f1 و در صورت تساوی، f2
+    # انتخاب بهترین جواب بر اساس کمینه‌سازی f1 (هزینه تصمیم) و در صورت تساوی، f2 (ناحیه مرزی)
     best_idx = 0
     best_f1 = F[0, 0]
     best_f2 = F[0, 1]
@@ -107,9 +133,15 @@ def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
     return res.X[best_idx, 0], res.X[best_idx, 1]
 
 
-
-# اعمال تصمیم سه‌طرفه بر اساس آستانه‌های به‌دست آمده
+# ------------------------ اعمال تصمیم سه‌طرفه ------------------------
 def applyThreeWayDecision(p_pred, lPN_arr, lNP_arr, u, v):
+    """
+    بر اساس مقادیر بهینه u و v، آستانه‌های سه‌طرفه (α و β) محاسبه می‌شود.
+    - اگر p >= α: برچسب ۱ (تأیید)
+    - اگر p <= β: برچسب ۰ (رد)
+    - در غیر این صورت: برچسب -1 (ناحیه مرزی)
+    همچنین اندیس نمونه‌های ناحیه مرزی جمع‌آوری می‌شود.
+    """
     labels = []
     boundary_indices = []
     for i in range(len(p_pred)):
@@ -134,8 +166,13 @@ def applyThreeWayDecision(p_pred, lPN_arr, lNP_arr, u, v):
     return np.array(labels), boundary_indices
 
 
-# آموزش مدل استکینگ برای نمونه‌های مرزی
+# ------------------------ توابع مدل استکینگ ------------------------
 def trainStacking(X_train, y_train, base_models, meta_model):
+    """
+    آموزش مدل استکینگ:
+      - استفاده از KFold برای آموزش مدل‌های پایه
+      - خروجی احتمال هر مدل پایه به عنوان ویژگی ورودی برای مدل متا استفاده می‌شود.
+    """
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     level_one_output = np.zeros((len(X_train), len(base_models)))
     X_arr = np.array(X_train)
@@ -152,29 +189,73 @@ def trainStacking(X_train, y_train, base_models, meta_model):
 
 
 def predictStacking(X_test, base_models, meta_model):
+    """
+    پیش‌بینی با استفاده از مدل استکینگ:
+      - ابتدا احتمال هر مدل پایه برای داده‌های تست محاسبه می‌شود.
+      - سپس مدل متا بر اساس این ویژگی‌ها تصمیم نهایی را پیش‌بینی می‌کند.
+    """
     base_preds = np.zeros((len(X_test), len(base_models)))
     for idx, model in enumerate(base_models):
         base_preds[:, idx] = model.predict_proba(X_test)[:, 1]
     return meta_model.predict(base_preds)
 
 
-# اجرای کل فرآیند در یک اسکریپت
+# ------------------------ ارزیابی عملکرد مدل ------------------------
+def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
+    """
+    ارزیابی عملکرد مدل با استفاده از معیارهای استاندارد scikit-learn.
+    علاوه بر معیارهای کلاسیک، هزینه تصمیم (Decision Cost) نیز محاسبه می‌شود.
+    """
+    ba = balanced_accuracy_score(y_true, y_pred)
+    auc = roc_auc_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
+    cm = confusion_matrix(y_true, y_pred)
+    report = classification_report(y_true, y_pred)
+
+    # محاسبه هزینه تصمیم
+    total_cost = 0
+    for i in range(len(y_true)):
+        if y_true[i] == 1 and y_pred[i] == 0:
+            total_cost += lNP_arr[i]
+        elif y_true[i] == 0 and y_pred[i] == 1:
+            total_cost += lPN_arr[i]
+
+    print("Balanced Accuracy:", ba)
+    print("AUC:", auc)
+    print("Precision:", precision)
+    print("Recall:", recall)
+    print("F1 Score:", f1)
+    print("Confusion Matrix:\n", cm)
+    print("Classification Report:\n", report)
+    print("Decision Cost:", total_cost)
+
+
+# ------------------------ اجرای کل فرآیند ------------------------
 if __name__ == "__main__":
-    # دریافت و پیش‌پردازش داده
+    # مرحله ۱: دریافت و پیش‌پردازش داده‌ها
     X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
-    # آموزش مدل LightGBM و دریافت احتمال نکول
+
+    # مرحله ۲: آموزش مدل LightGBM و دریافت احتمال نکول
     p_pred_test, _ = trainLGBMModel(X_train_res, y_train_res, X_test)
-    # محاسبه ضررهای مالی از اطلاعات جریان نقدی
+
+    # مرحله ۳: محاسبه ضررهای مالی از اطلاعات جریان نقدی
     cash_flow = X_test[['approval_amount', 'interest_amount']]
     lPN_arr_test, lNP_arr_test = computeLosses(cash_flow)
-    # بهینه‌سازی u و v با pymoo
+
+    # مرحله ۴: بهینه‌سازی u و v با استفاده از NSGA-II (pymoo)
     best_u, best_v = nsga2_find_uv(p_pred_test, lPN_arr_test, lNP_arr_test, pop_size=20, generations=10)
-    # اعمال تصمیم سه‌طرفه بر اساس آستانه‌های به‌دست آمده
+    print("بهترین u:", best_u, "بهترین v:", best_v)
+
+    # مرحله ۵: اعمال تصمیم سه‌طرفه با استفاده از آستانه‌های به‌دست آمده
     twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, lPN_arr_test, lNP_arr_test, best_u, best_v)
-    # استخراج نمونه‌های مرزی
+
+    # نمونه‌های مرزی برای استکینگ
     X_test_boundary = X_test.iloc[boundary_indices]
     y_test_boundary = y_test.iloc[boundary_indices]
-    # آموزش استکینگ برای نمونه‌های مرزی
+
+    # مرحله ۶: آموزش مدل استکینگ برای نمونه‌های مرزی
     base_models = [
         LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=0),
         RandomForestClassifier(n_estimators=100, random_state=0),
@@ -185,34 +266,12 @@ if __name__ == "__main__":
     ]
     meta_model = LogisticRegression()
     base_models, meta_model = trainStacking(X_train_res, y_train_res, base_models, meta_model)
-    # پیش‌بینی نهایی برای نمونه‌های مرزی با مدل استکینگ
+
+    # مرحله ۷: پیش‌بینی نهایی برای نمونه‌های مرزی با استفاده از مدل استکینگ
     y_pred_boundary = predictStacking(X_test_boundary, base_models, meta_model)
+    # جایگزینی نتایج پیش‌بینی مدل استکینگ در برچسب‌های نهایی تصمیم سه‌طرفه
     for i, idx in enumerate(boundary_indices):
         twd_labels[idx] = y_pred_boundary[i]
-    # ارزیابی عملکرد نهایی
-    cm = confusion_matrix(y_test, twd_labels)
-    TN, FP, FN, TP = cm[0, 0], cm[0, 1], cm[1, 0], cm[1, 1]
-    balanced_acc = 0
-    if (TP + FP) != 0 and (TN + FN) != 0:
-        balanced_acc = ((TP / (TP + FP)) + (TN / (TN + FN))) / 2.0
-    auc_score = roc_auc_score(y_test, twd_labels)
-    precision = TP / (TP + FP) if (TP + FP) != 0 else 0
-    recall = TP / (TP + FN) if (TP + FN) != 0 else 0
-    fmeasure = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
-    sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
-    specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
-    gmean = (sensitivity * specificity) ** 0.5
-    total_cost = 0
-    y_test_arr = np.array(y_test)
-    twd_labels_arr = np.array(twd_labels)
-    for i in range(len(y_test_arr)):
-        if y_test_arr[i] == 1 and twd_labels_arr[i] == 0:
-            total_cost += lNP_arr_test[i]
-        elif y_test_arr[i] == 0 and twd_labels_arr[i] == 1:
-            total_cost += lPN_arr_test[i]
-    print("Balanced Accuracy:", balanced_acc)
-    print("AUC:", auc_score)
-    print("F-Measure:", fmeasure)
-    print("G-Mean:", gmean)
-    print("Decision Cost:", total_cost)
-    print("Confusion Matrix (TN, FP, FN, TP):", TN, FP, FN, TP)
+
+    # مرحله ۸: ارزیابی عملکرد کلی مدل
+    evaluate_performance(np.array(y_test), np.array(twd_labels), lPN_arr_test, lNP_arr_test)
