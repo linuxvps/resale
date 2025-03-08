@@ -1,9 +1,12 @@
+from typing import Tuple
+
+import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
-from typing import Tuple
-import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
+# protected_columns=None
+protected_columns=['approval_amount', 'interest_amount']
 
 class LoanPreprocessor:
     """کلاس مسئول پیش‌پردازش داده‌های وام."""
@@ -78,6 +81,9 @@ class LoanPreprocessor:
         df = self.convert_dataframe_columns(df)
         df.drop(columns=["create_date"], errors="ignore", inplace=True)
 
+        df = self.remove_highly_correlated_features(df, threshold=0.9, class_column=label_column)
+
+
         # جایگزینی داده‌های گمشده
         df_imputed = pd.DataFrame(self.imputer.fit_transform(df), columns=df.columns)
 
@@ -86,3 +92,51 @@ class LoanPreprocessor:
         y = df_imputed[label_column]
 
         return X, y
+
+    def remove_highly_correlated_features(self, data, threshold, class_column=None):
+        """
+        این تابع ویژگی‌هایی که همبستگی بالایی با یکدیگر دارند را حذف می‌کند.
+        ورودی‌ها:
+          data: دیتافریم ورودی
+          threshold: آستانه همبستگی
+          class_column: نام ستون کلاس (اختیاری)
+          protected_columns: لیستی از ستون‌هایی که نباید حذف شوند (اختیاری)
+        خروجی:
+          دیتافریم جدید با حذف ویژگی‌های همبسته.
+        """
+
+        new_data = data.copy()
+        numeric_cols = new_data.select_dtypes(include=[np.number]).columns.tolist()
+
+        # حذف ستون کلاس از بررسی در صورت وجود
+        if class_column and class_column in numeric_cols:
+            numeric_cols.remove(class_column)
+
+        # حذف ستون‌های محافظت‌شده از لیست پردازش
+        numeric_cols = [col for col in numeric_cols if col not in protected_columns]
+
+        corr_matrix = new_data[numeric_cols].corr()
+        attributes_to_remove = set()
+
+        for i in range(len(numeric_cols) - 1):
+            col_i = numeric_cols[i]
+            for j in range(i + 1, len(numeric_cols)):
+                col_j = numeric_cols[j]
+                corr_value = corr_matrix.iloc[i, j]
+                if abs(corr_value) > threshold:
+                    print(f"🔴 همبستگی بالا بین: {col_i} و {col_j} | مقدار: {corr_value:.4f} | حذف: {col_j}")
+                    attributes_to_remove.add(col_j)
+
+        for col in attributes_to_remove:
+            if class_column and col == class_column:
+                continue
+            if protected_columns and col in protected_columns:
+                continue
+            print(f"✅ ویژگی حذف شد: {col}")
+            new_data.drop(columns=[col], inplace=True)
+
+        # چاپ ماتریس همبستگی به صورت جدول
+        print("ماتریس همبستگی:")
+        print(corr_matrix.to_string())
+
+        return new_data

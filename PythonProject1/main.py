@@ -12,7 +12,7 @@ from xgboost import XGBClassifier
 
 # کتابخانه‌های مربوط به دریافت و پیش‌پردازش داده (کلاس‌های موجود در پروژه)
 from dataHandler.LoanDataHandler import LoanDataHandler
-from processor.LoanPreprocessor import LoanPreprocessor
+from processor.LoanPreprocessor import LoanPreprocessor, protected_columns
 from repository.LoanRepository import LoanRepository
 
 
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     p_pred_test, _ = trainLGBMModel(X_train_res, y_train_res, X_test)
 
     # ۳. محاسبه ضررهای مالی از اطلاعات جریان نقدی
-    cash_flow = X_test[['approval_amount', 'interest_amount']]
+    cash_flow = X_test[protected_columns]
     lPN_arr_test, lNP_arr_test = computeLosses(cash_flow)
 
     # ۴. بهینه‌سازی u و v با NSGA-II
