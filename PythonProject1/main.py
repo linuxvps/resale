@@ -26,7 +26,7 @@ def preProcessDataFromDB():
 
 # ------------------------ آموزش مدل LightGBM ------------------------
 def trainLGBMModel(X_train, y_train, X_test):
-    lgbm = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42)
+    lgbm = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
     print("شروع آموزش مدل LightGBM...")
     lgbm.fit(X_train, y_train)
     print("آموزش مدل به پایان رسید.")
