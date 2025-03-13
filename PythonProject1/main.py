@@ -1,3 +1,4 @@
+import os
 import numpy as np
 # کتابخانه‌های مدل‌سازی و ارزیابی
 from lightgbm import LGBMClassifier
@@ -130,6 +131,8 @@ def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
 
 # ------------------------ اجرای کل فرآیند ------------------------
 if __name__ == "__main__":
+    os.environ["LOKY_MAX_CPU_COUNT"] = "8"  # مقدار را بر اساس تعداد هسته‌های CPU خودت تنظیم کن
+
     # ۱. دریافت و پیش‌پردازش داده
     X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
 
@@ -157,7 +160,7 @@ if __name__ == "__main__":
     estimators = [
         ('lgb', LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=0)),
         ('rf', RandomForestClassifier(n_estimators=100, random_state=0)),
-        ('xgb', XGBClassifier(n_estimators=100, use_label_encoder=False, eval_metric='logloss', random_state=0)),
+        ('xgb', XGBClassifier(n_estimators=100, eval_metric='logloss', random_state=0)),
         ('gb', GradientBoostingClassifier(n_estimators=100, random_state=0)),
         ('et', ExtraTreesClassifier(n_estimators=100, random_state=0)),
         ('ada', AdaBoostClassifier(n_estimators=100, random_state=0))
