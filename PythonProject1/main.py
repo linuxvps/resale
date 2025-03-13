@@ -1,15 +1,14 @@
 import os
+
 import numpy as np
 # کتابخانه‌های مدل‌سازی و ارزیابی
 from lightgbm import LGBMClassifier
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
-    AdaBoostClassifier, VotingClassifier
+from sklearn.ensemble import ExtraTreesClassifier, BaggingClassifier
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
-from xgboost import XGBClassifier
 
 # کتابخانه‌های مربوط به دریافت و پیش‌پردازش داده (کلاس‌های موجود در پروژه)
 from dataHandler.LoanDataHandler import LoanDataHandler
@@ -40,7 +39,7 @@ def computeLosses(cash_flow_info):
     # استفاده از عملگرهای وکتورایز برای محاسبه ضرر
     principal = cash_flow_info['approval_amount'].values
     interest = cash_flow_info['interest_amount'].values
-    lPN_arr = interest           # هزینه PN به صورت مستقیم
+    lPN_arr = interest  # هزینه PN به صورت مستقیم
     lNP_arr = principal + interest  # هزینه NP به صورت وکتور
     return lPN_arr, lNP_arr
 
@@ -157,25 +156,20 @@ if __name__ == "__main__":
     # ۵. اعمال تصمیم سه‌طرفه
     # u =  وزن هزینه از دست دادن اصل و سود وام
 
-    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, loss_PN_arr_test, loss_NP_arr_test, best_u, best_v)
+    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, loss_PN_arr_test, loss_NP_arr_test, best_u,
+                                                         best_v)
 
-    # ۶. استفاده از VotingClassifier برای مدل بگینگ با چند مدل پایه
-    # تعریف مدل‌های پایه
-    estimators = [
-        ('lgb', LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=0)),
-        ('rf', RandomForestClassifier(n_estimators=100, random_state=0)),
-        ('xgb', XGBClassifier(n_estimators=100, eval_metric='logloss', random_state=0)),
-        ('gb', GradientBoostingClassifier(n_estimators=100, random_state=0)),
-        ('et', ExtraTreesClassifier(n_estimators=100, random_state=0)),
-        ('ada', AdaBoostClassifier(n_estimators=100, random_state=0))
-    ]
-    # استفاده از VotingClassifier به صورت soft voting برای ترکیب مدل‌ها
-    voting_model = VotingClassifier(estimators=estimators, voting='soft')
-    voting_model.fit(X_train_res, y_train_res)
+    # استفاده از BaggingClassifier با مدل پایه LGBMClassifier
+    bagging_model = BaggingClassifier(
+        estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
+        n_estimators=10,  # تعداد نسخه‌های مدل پایه که می‌خواهیم آموزش ببینند
+        random_state=42
+    )
+    bagging_model.fit(X_train_res, y_train_res)
 
-    # ۷. پیش‌بینی نمونه‌های مرزی با مدل VotingClassifier
+    # پیش‌بینی روی نمونه‌های مرزی
     X_test_boundary = X_test.iloc[boundary_indices]
-    y_pred_boundary = voting_model.predict(X_test_boundary)
+    y_pred_boundary = bagging_model.predict(X_test_boundary)
     twd_labels[boundary_indices] = y_pred_boundary
 
     # ۸. ارزیابی عملکرد کلی مدل
