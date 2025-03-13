@@ -17,7 +17,7 @@ from repository.LoanRepository import LoanRepository
 
 
 # ------------------------ دریافت و پیش‌پردازش داده ------------------------
-def preProcessDataFromDB():
+def pre_process_data_from_db():
     repository = LoanRepository()
     preprocessor = LoanPreprocessor(imputation_strategy="median")
     data_handler = LoanDataHandler(repository, preprocessor)
@@ -25,91 +25,86 @@ def preProcessDataFromDB():
 
 
 # ------------------------ آموزش مدل LightGBM ------------------------
-def trainLGBMModel(X_train, y_train, X_test):
+def train_lgbm_model(x_train, y_train, x_test):
     lgbm = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
     print("شروع آموزش مدل LightGBM...")
-    lgbm.fit(X_train, y_train)
+    lgbm.fit(x_train, y_train)
     print("آموزش مدل به پایان رسید.")
-    p_pred = lgbm.predict_proba(X_test)[:, 1]
+    p_pred = lgbm.predict_proba(x_test)[:, 1]
     return p_pred
 
-
 # ------------------------ محاسبه ضرر ------------------------
-def computeLosses(cash_flow_info):
-    # استفاده از عملگرهای وکتورایز برای محاسبه ضرر
+def compute_losses(cash_flow_info):
     principal = cash_flow_info['approval_amount'].values
     interest = cash_flow_info['interest_amount'].values
-    lPN_arr = interest  # هزینه PN به صورت مستقیم
-    lNP_arr = principal + interest  # هزینه NP به صورت وکتور
-    return lPN_arr, lNP_arr
+    lpn_arr = interest
+    lnp_arr = principal + interest
+    return lpn_arr, lnp_arr
 
 
 # ------------------------ تعریف تابع هدف NSGA-II (وکتورایز شده) ------------------------
 class ObjectiveProblem(Problem):
-    def __init__(self, p_pred, lPN_arr, lNP_arr):
+    def __init__(self, p_pred, lpn_arr, lnp_arr):
         self.p_pred = p_pred
-        self.lPN_arr = lPN_arr
-        self.lNP_arr = lNP_arr
+        self.lpn_arr = lpn_arr
+        self.lnp_arr = lnp_arr
         super().__init__(n_var=2, n_obj=2, n_constr=1,
                          xl=np.array([0.0, 0.0]),
                          xu=np.array([1.0, 1.0]))
 
-    def _evaluate(self, X, out, *args, **kwargs):
-        n_ind = X.shape[0]
+    def _evaluate(self, x, out, *args, **kwargs):
+        n_ind = x.shape[0]
         f1 = np.zeros(n_ind)
         f2 = np.zeros(n_ind)
-        # محاسبات هر فرد (u, v) به صورت وکتورایز درون داده‌های نمونه
         for i in range(n_ind):
-            u, v = X[i]
-            bp = u * self.lNP_arr
-            bn = v * self.lPN_arr
-            numerator_alpha = self.lPN_arr - bn
+            u, v = x[i]
+            bp = u * self.lnp_arr
+            bn = v * self.lpn_arr
+            numerator_alpha = self.lpn_arr - bn
             denom_alpha = numerator_alpha + bp
             alpha = np.where(denom_alpha == 0, 1.0, numerator_alpha / denom_alpha)
             numerator_beta = bn
-            denom_beta = bn + (self.lNP_arr - bp)
+            denom_beta = bn + (self.lnp_arr - bp)
             beta = np.where(denom_beta == 0, 0.0, numerator_beta / denom_beta)
             cost_local = np.where(self.p_pred >= alpha,
-                                  self.lPN_arr * (1 - self.p_pred),
+                                  self.lpn_arr * (1 - self.p_pred),
                                   np.where(self.p_pred <= beta,
-                                           self.lNP_arr * self.p_pred,
+                                           self.lnp_arr * self.p_pred,
                                            bp * self.p_pred + bn * (1 - self.p_pred)))
             f1[i] = np.sum(cost_local)
             f2[i] = np.sum(alpha - beta)
-        # قید: u + v <= 1
-        g = X[:, 0] + X[:, 1] - 1.0
+        g = x[:, 0] + x[:, 1] - 1.0
         out["F"] = np.column_stack([f1, f2])
         out["G"] = g.reshape(-1, 1)
 
 
+
 # ------------------------ بهینه‌سازی u و v با NSGA-II ------------------------
-def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
-    problem = ObjectiveProblem(p_pred, lPN_arr, lNP_arr)
+def nsga2_find_uv(p_pred, lpn_arr, lnp_arr, pop_size=20, generations=10):
+    problem = ObjectiveProblem(p_pred, lpn_arr, lnp_arr)
     algorithm = NSGA2(pop_size=pop_size)
     res = minimize(problem, algorithm, ('n_gen', generations), seed=1, verbose=False)
-    F = res.F
-    # انتخاب بهترین جواب به صورت لکسیکوگرافی (ابتدا f1 سپس f2)
-    idx = np.lexsort((F[:, 1], F[:, 0]))[0]
+    f = res.F
+    idx = np.lexsort((f[:, 1], f[:, 0]))[0]
     return res.X[idx, 0], res.X[idx, 1]
 
 
 # ------------------------ اعمال تصمیم سه‌طرفه ------------------------
-def applyThreeWayDecision(p_pred, loss_PN_arr, loss_NP_arr, u, v):
-    bp = u * loss_NP_arr
-    bn = v * loss_PN_arr
-    numerator_alpha = loss_PN_arr - bn
+def apply_three_way_decision(p_pred, loss_pn_arr, loss_np_arr, u, v):
+    bp = u * loss_np_arr
+    bn = v * loss_pn_arr
+    numerator_alpha = loss_pn_arr - bn
     denom_alpha = numerator_alpha + bp
     alpha = np.where(denom_alpha == 0, 1.0, numerator_alpha / denom_alpha)
     numerator_beta = bn
-    denom_beta = bn + (loss_NP_arr - bp)
+    denom_beta = bn + (loss_np_arr - bp)
     beta = np.where(denom_beta == 0, 0.0, numerator_beta / denom_beta)
     labels = np.where(p_pred >= alpha, 1, np.where(p_pred <= beta, 0, -1))
     boundary_indices = np.where(labels == -1)[0]
     return labels, boundary_indices
 
-
 # ------------------------ ارزیابی عملکرد ------------------------
-def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
+def evaluate_performance(y_true, y_pred, lpn_arr, lnp_arr):
     print("\n" * 3)
     print("ارزیابی عملکرد کلی مدل")
     print("\n" * 3)
@@ -121,7 +116,7 @@ def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
     f1 = f1_score(y_true, y_pred)
     cm = confusion_matrix(y_true, y_pred)
     report = classification_report(y_true, y_pred)
-    cost_decision = np.sum(lNP_arr[(y_true == 1) & (y_pred == 0)]) + np.sum(lPN_arr[(y_true == 0) & (y_pred == 1)])
+    cost_decision = np.sum(lnp_arr[(y_true == 1) & (y_pred == 0)]) + np.sum(lpn_arr[(y_true == 0) & (y_pred == 1)])
     print("Balanced Accuracy:", ba)
     print("AUC:", auc)
     print("Precision:", precision)
@@ -132,32 +127,34 @@ def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
     print("Decision Cost:", cost_decision)
 
 
+
+
 # ------------------------ اجرای کل فرآیند ------------------------
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"  # مقدار را بر اساس تعداد هسته‌های CPU خودت تنظیم کن
 
     # ۱. دریافت و پیش‌پردازش داده
-    X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
+    x_train_res, y_train_res, x_test, y_test = pre_process_data_from_db()
 
     # ۲. احتمال این که یک نم.نه نکول شه
-    p_pred_test = trainLGBMModel(X_train_res, y_train_res, X_test)
+    p_pred_test = train_lgbm_model(x_train_res, y_train_res, x_test)
 
     # ۳. محاسبه ضررهای مالی از اطلاعات جریان نقدی
-    cash_flow = X_test[protected_columns]
+    cash_flow = x_test[protected_columns]
     # در این کد، متغیر pn به معنای ضرر PN است که به "سود از دست رفته" اشاره دارد. یعنی زمانی که یک نمونه غیر نکول (non-default) به اشتباه به عنوان نکول (default) تشخیص داده شود، تنها سود (interest_amount) از دست می‌رود
     # مقدار ضرر این  که سود از دست برده و مقدار ضرر این ک اینکه سود و اصل پول از دست بره
-    loss_PN_arr_test, loss_NP_arr_test = computeLosses(cash_flow)
+    loss_pn_arr_test, loss_np_arr_test = compute_losses(cash_flow)
 
     # ۴. بهینه‌سازی u و v با NSGA-II
-    best_u, best_v = nsga2_find_uv(p_pred_test, loss_PN_arr_test, loss_NP_arr_test, pop_size=20, generations=10)
+    best_u, best_v = nsga2_find_uv(p_pred_test, loss_pn_arr_test, loss_np_arr_test, pop_size=20, generations=10)
     print("بهترین u:", best_u)
     print("بهترین v:", best_v)
 
     # ۵. اعمال تصمیم سه‌طرفه
     # u =  وزن هزینه از دست دادن اصل و سود وام
 
-    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, loss_PN_arr_test, loss_NP_arr_test, best_u,
-                                                         best_v)
+    twd_labels, boundary_indices = apply_three_way_decision(p_pred_test, loss_pn_arr_test, loss_np_arr_test, best_u, best_v)
+
 
     # استفاده از BaggingClassifier با مدل پایه LGBMClassifier
     bagging_model = BaggingClassifier(
@@ -165,12 +162,13 @@ if __name__ == "__main__":
         n_estimators=10,  # تعداد نسخه‌های مدل پایه که می‌خواهیم آموزش ببینند
         random_state=42
     )
-    bagging_model.fit(X_train_res, y_train_res)
+    bagging_model.fit(x_train_res, y_train_res)
 
     # پیش‌بینی روی نمونه‌های مرزی
-    X_test_boundary = X_test.iloc[boundary_indices]
-    y_pred_boundary = bagging_model.predict(X_test_boundary)
+    x_test_boundary = x_test.iloc[boundary_indices]
+    y_pred_boundary = bagging_model.predict(x_test_boundary)
     twd_labels[boundary_indices] = y_pred_boundary
 
     # ۸. ارزیابی عملکرد کلی مدل
-    evaluate_performance(np.array(y_test), np.array(twd_labels), loss_PN_arr_test, loss_NP_arr_test)
+    evaluate_performance(np.array(y_test), np.array(twd_labels), loss_pn_arr_test, loss_np_arr_test)
+
