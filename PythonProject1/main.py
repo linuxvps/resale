@@ -37,8 +37,8 @@ def trainLGBMModel(X_train, y_train, X_test):
 # ------------------------ محاسبه ضرر ------------------------
 def computeLosses(cash_flow_info):
     # استفاده از عملگرهای وکتورایز برای محاسبه ضرر
-    principal = cash_flow_info['approval_amount'].values
-    interest = cash_flow_info['interest_amount'].values
+    principal = cash_flow_info.iloc[:, 0].values
+    interest = cash_flow_info.iloc[:, 1].values
     lPN_arr = interest           # هزینه PN به صورت مستقیم
     lNP_arr = principal + interest  # هزینه NP به صورت وکتور
     return lPN_arr, lNP_arr
