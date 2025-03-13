@@ -31,14 +31,14 @@ def trainLGBMModel(X_train, y_train, X_test):
     lgbm.fit(X_train, y_train)
     print("آموزش مدل به پایان رسید.")
     p_pred = lgbm.predict_proba(X_test)[:, 1]
-    return p_pred, lgbm
+    return p_pred
 
 
 # ------------------------ محاسبه ضرر ------------------------
 def computeLosses(cash_flow_info):
     # استفاده از عملگرهای وکتورایز برای محاسبه ضرر
-    principal = cash_flow_info.iloc[:, 0].values
-    interest = cash_flow_info.iloc[:, 1].values
+    principal = cash_flow_info['approval_amount'].values
+    interest = cash_flow_info['interest_amount'].values
     lPN_arr = interest           # هزینه PN به صورت مستقیم
     lNP_arr = principal + interest  # هزینه NP به صورت وکتور
     return lPN_arr, lNP_arr
@@ -94,14 +94,14 @@ def nsga2_find_uv(p_pred, lPN_arr, lNP_arr, pop_size=20, generations=10):
 
 
 # ------------------------ اعمال تصمیم سه‌طرفه ------------------------
-def applyThreeWayDecision(p_pred, lPN_arr, lNP_arr, u, v):
-    bp = u * lNP_arr
-    bn = v * lPN_arr
-    numerator_alpha = lPN_arr - bn
+def applyThreeWayDecision(p_pred, loss_PN_arr, loss_NP_arr, u, v):
+    bp = u * loss_NP_arr
+    bn = v * loss_PN_arr
+    numerator_alpha = loss_PN_arr - bn
     denom_alpha = numerator_alpha + bp
     alpha = np.where(denom_alpha == 0, 1.0, numerator_alpha / denom_alpha)
     numerator_beta = bn
-    denom_beta = bn + (lNP_arr - bp)
+    denom_beta = bn + (loss_NP_arr - bp)
     beta = np.where(denom_beta == 0, 0.0, numerator_beta / denom_beta)
     labels = np.where(p_pred >= alpha, 1, np.where(p_pred <= beta, 0, -1))
     boundary_indices = np.where(labels == -1)[0]
@@ -133,19 +133,24 @@ if __name__ == "__main__":
     # ۱. دریافت و پیش‌پردازش داده
     X_train_res, y_train_res, X_test, y_test = preProcessDataFromDB()
 
-    # ۲. آموزش مدل LightGBM و دریافت احتمال نکول
-    p_pred_test, _ = trainLGBMModel(X_train_res, y_train_res, X_test)
+    # ۲. احتمال این که یک نم.نه نکول شه
+    p_pred_test = trainLGBMModel(X_train_res, y_train_res, X_test)
 
     # ۳. محاسبه ضررهای مالی از اطلاعات جریان نقدی
     cash_flow = X_test[protected_columns]
-    lPN_arr_test, lNP_arr_test = computeLosses(cash_flow)
+    # در این کد، متغیر pn به معنای ضرر PN است که به "سود از دست رفته" اشاره دارد. یعنی زمانی که یک نمونه غیر نکول (non-default) به اشتباه به عنوان نکول (default) تشخیص داده شود، تنها سود (interest_amount) از دست می‌رود
+    # مقدار ضرر این  که سود از دست برده و مقدار ضرر این ک اینکه سود و اصل پول از دست بره
+    loss_PN_arr_test, loss_NP_arr_test = computeLosses(cash_flow)
 
     # ۴. بهینه‌سازی u و v با NSGA-II
-    best_u, best_v = nsga2_find_uv(p_pred_test, lPN_arr_test, lNP_arr_test, pop_size=20, generations=10)
-    print("بهترین u:", best_u, "بهترین v:", best_v)
+    best_u, best_v = nsga2_find_uv(p_pred_test, loss_PN_arr_test, loss_NP_arr_test, pop_size=20, generations=10)
+    print("بهترین u:", best_u)
+    print("بهترین v:", best_v)
 
     # ۵. اعمال تصمیم سه‌طرفه
-    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, lPN_arr_test, lNP_arr_test, best_u, best_v)
+    # u =  وزن هزینه از دست دادن اصل و سود وام
+
+    twd_labels, boundary_indices = applyThreeWayDecision(p_pred_test, loss_PN_arr_test, loss_NP_arr_test, best_u, best_v)
 
     # ۶. استفاده از VotingClassifier برای مدل بگینگ با چند مدل پایه
     # تعریف مدل‌های پایه
@@ -167,4 +172,4 @@ if __name__ == "__main__":
     twd_labels[boundary_indices] = y_pred_boundary
 
     # ۸. ارزیابی عملکرد کلی مدل
-    evaluate_performance(np.array(y_test), np.array(twd_labels), lPN_arr_test, lNP_arr_test)
+    evaluate_performance(np.array(y_test), np.array(twd_labels), loss_PN_arr_test, loss_NP_arr_test)
