@@ -111,6 +111,10 @@ def applyThreeWayDecision(p_pred, loss_PN_arr, loss_NP_arr, u, v):
 
 # ------------------------ ارزیابی عملکرد ------------------------
 def evaluate_performance(y_true, y_pred, lPN_arr, lNP_arr):
+    print("\n" * 3)
+    print("ارزیابی عملکرد کلی مدل")
+    print("\n" * 3)
+
     ba = balanced_accuracy_score(y_true, y_pred)
     auc = roc_auc_score(y_true, y_pred)
     precision = precision_score(y_true, y_pred)
