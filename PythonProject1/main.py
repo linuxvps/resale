@@ -14,6 +14,8 @@ from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classificati
 from dataHandler.LoanDataHandler import LoanDataHandler
 from processor.LoanPreprocessor import LoanPreprocessor, protected_columns
 from repository.LoanRepository import LoanRepository
+from decimal import Decimal
+
 
 
 # ------------------------ دریافت و پیش‌پردازش داده ------------------------
@@ -147,8 +149,8 @@ if __name__ == "__main__":
 
     # ۴. بهینه‌سازی u و v با NSGA-II
     best_u, best_v = nsga2_find_uv(p_pred_test, loss_pn_arr_test, loss_np_arr_test, pop_size=20, generations=10)
-    print("بهترین u:", best_u)
-    print("بهترین v:", best_v)
+    print("بهترین u:", Decimal(best_u))
+    print("بهترین v:", Decimal(best_v))
 
     # ۵. اعمال تصمیم سه‌طرفه
     # u =  وزن هزینه از دست دادن اصل و سود وام
