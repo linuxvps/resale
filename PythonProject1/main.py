@@ -14,7 +14,7 @@ from processor.LoanPreprocessor import LoanPreprocessor, protected_columns
 from repository.LoanRepository import LoanRepository
 
 # ------------------------ وارد کردن توابع و کلاس‌های مربوط به بهینه‌سازی ------------------------
-from optimization.ObjectiveProblem import nsga2_find_uv
+from optimization.ObjectiveProblem import optimize_threshold_scales
 
 
 # ------------------------ دریافت و پیش‌پردازش داده ------------------------
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     loss_pn_arr_test, loss_np_arr_test = compute_losses(cash_flow)
 
     # ۴. بهینه‌سازی پارامترهای u و v با استفاده از NSGA-II
-    best_u, best_v = nsga2_find_uv(p_pred_test, loss_pn_arr_test, loss_np_arr_test, pop_size=20, generations=10)
+    best_u, best_v = optimize_threshold_scales(p_pred_test, loss_pn_arr_test, loss_np_arr_test, population_size=20, num_generations=10)
     print("بهترین u:", Decimal(best_u))
     print("بهترین v:", Decimal(best_v))
 
