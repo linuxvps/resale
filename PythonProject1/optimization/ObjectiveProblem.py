@@ -3,112 +3,109 @@ from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.optimize import minimize
 
-
-class ObjectiveProblem(Problem):
+class ThresholdOptimizationProblem(Problem):
     """
-    مسئله بهینه‌سازی چندهدفه برای تعیین آستانه‌های سه‌راه با استفاده از NSGA-II.
-
+    مسئله تعیین مقیاس‌های تنظیمی برای محاسبه آستانه‌های تصمیم‌گیری.
     ورودی‌ها:
-        - predicted_probs: آرایه‌ای از احتمال‌های پیش‌بینی شده (مثلاً احتمال نکول)
-        - loss_PN: آرایه هزینه‌های مربوط به تصمیم اشتباه "قبول" برای نمونه‌های غیرنکول
-        - loss_NP: آرایه هزینه‌های مربوط به تصمیم اشتباه "رد" برای نمونه‌های نکول
+      - predicted_probs: آرایه احتمال‌های پیش‌بینی شده (برای هر نمونه)
+      - false_pos_cost: آرایه هزینه‌های اشتباه «قبول» (False Positive)
+      - false_neg_cost: آرایه هزینه‌های اشتباه «رد» (False Negative)
     """
 
-    def __init__(self, predicted_probs, loss_PN, loss_NP):
+    def __init__(self, predicted_probs, false_pos_cost, false_neg_cost):
         self.predicted_probs = predicted_probs
-        self.loss_PN = loss_PN  # هزینه مربوط به تصمیم "قبول" (برای نمونه‌های غیرنکول)
-        self.loss_NP = loss_NP  # هزینه مربوط به تصمیم "رد" (برای نمونه‌های نکول)
-
-        # تعریف مسئله:
-        # 2 متغیر (u, v)، 2 تابع هدف (f1: هزینه کل تصمیم، f2: اندازه منطقه مرزی) و
-        # 1 محدودیت (u + v <= 1)
+        self.false_pos_cost = false_pos_cost
+        self.false_neg_cost = false_neg_cost
+        # متغیرهای تصمیم:
+        #   scale_fn: مقیاس تنظیمی برای هزینه false negative
+        #   scale_fp: مقیاس تنظیمی برای هزینه false positive
+        # تابع‌های هدف:
+        #   objective1: مجموع هزینه‌های نمونه‌ها
+        #   objective2: مجموع اختلاف آستانه‌های بالا و پایین (عرض مرز)
+        # محدودیت:
+        #   scale_fn + scale_fp <= 1
         super().__init__(n_var=2, n_obj=2, n_constr=1,
-                         xl=np.array([0.0, 0.0]),  # پایین‌ترین مقدار برای u و v
-                         xu=np.array([1.0, 1.0]))  # بالاترین مقدار برای u و v
+                         xl=np.array([0.0, 0.0]),  # حداقل مقیاس‌ها
+                         xu=np.array([1.0, 1.0]))  # حداکثر مقیاس‌ها
 
-    def _evaluate(self, x, out, *args, **kwargs):
-        """
-        محاسبه تابع هدف برای هر راه‌حل (هر فرد).
+    def calculate_adjusted_costs(self, scale_fn, scale_fp):
+        # محاسبه هزینه‌های تعدیلی بر اساس مقیاس‌های ورودی
+        adjusted_fn_cost = scale_fn * self.false_neg_cost   # هزینه false negative تعدیل‌شده
+        adjusted_fp_cost = scale_fp * self.false_pos_cost     # هزینه false positive تعدیل‌شده
+        return adjusted_fn_cost, adjusted_fp_cost
 
-        ورودی:
-            - x: آرایه‌ای با ابعاد (تعداد افراد, 2) شامل مقادیر u و v برای هر فرد
-        خروجی:
-            - out["F"]: ماتریس اهداف؛ ستون اول هزینه کل تصمیم و ستون دوم اندازه منطقه مرزی
-            - out["G"]: محدودیت (u + v - 1 <= 0)
-        """
-        n_individuals = x.shape[0]
-        total_cost = np.zeros(n_individuals)  # f1: هزینه کلی تصمیم‌گیری
-        boundary_size = np.zeros(n_individuals)  # f2: اندازه منطقه مرزی
+    def calculate_thresholds(self, adjusted_fn_cost, adjusted_fp_cost):
+        # محاسبه آستانه بالا (برای تصمیم «قبول») و آستانه پایین (برای تصمیم «رد»)
+        numerator_upper = self.false_pos_cost - adjusted_fp_cost
+        denominator_upper = numerator_upper + adjusted_fn_cost
+        upper_threshold = np.where(denominator_upper == 0, 1.0, numerator_upper / denominator_upper)
 
-        for i in range(n_individuals):
-            u, v = x[i]
-            # محاسبه تغییرات هزینه به کمک پارامترهای u و v:
-            bp = u * self.loss_NP
-            bn = v * self.loss_PN
+        numerator_lower = adjusted_fp_cost
+        denominator_lower = adjusted_fp_cost + (self.false_neg_cost - adjusted_fn_cost)
+        lower_threshold = np.where(denominator_lower == 0, 0.0, numerator_lower / denominator_lower)
+        return upper_threshold, lower_threshold
 
-            # محاسبه آستانه مثبت (alpha):
-            numerator_alpha = self.loss_PN - bn
-            denom_alpha = numerator_alpha + bp
-            alpha = np.where(denom_alpha == 0, 1.0, numerator_alpha / denom_alpha)
+    def compute_sample_costs(self, upper_threshold, lower_threshold, adjusted_fn_cost, adjusted_fp_cost):
+        # برای هر نمونه:
+        #   اگر احتمال پیش‌بینی >= آستانه بالا: هزینه = false_pos_cost * (1 - پیش‌بینی)
+        #   اگر احتمال پیش‌بینی <= آستانه پایین: هزینه = false_neg_cost * پیش‌بینی
+        #   در غیر این صورت: هزینه = adjusted_fn_cost * پیش‌بینی + adjusted_fp_cost * (1 - پیش‌بینی)
+        sample_costs = np.where(self.predicted_probs >= upper_threshold,
+                                self.false_pos_cost * (1 - self.predicted_probs),
+                                np.where(self.predicted_probs <= lower_threshold,
+                                         self.false_neg_cost * self.predicted_probs,
+                                         adjusted_fn_cost * self.predicted_probs + adjusted_fp_cost * (1 - self.predicted_probs)))
+        return sample_costs
 
-            # محاسبه آستانه منفی (beta):
-            numerator_beta = bn
-            denom_beta = bn + (self.loss_NP - bp)
-            beta = np.where(denom_beta == 0, 0.0, numerator_beta / denom_beta)
+    def _evaluate(self, population, out, *args, **kwargs):
+        # تعداد راه‌حل‌های موجود در جمعیت
+        num_solutions = population.shape[0]
+        # آرایه برای ذخیره مجموع هزینه هر راه‌حل
+        total_costs = np.zeros(num_solutions)
+        # آرایه برای ذخیره مجموع اختلاف آستانه‌ها (عرض مرز) هر راه‌حل
+        total_boundary_width = np.zeros(num_solutions)
 
-            # محاسبه هزینه محلی (local cost) برای هر نمونه:
-            # - اگر احتمال پیش‌بینی (predicted_prob) بالاتر یا مساوی آستانه مثبت (alpha) باشد:
-            #     هزینه = loss_PN * (1 - predicted_prob)
-            # - اگر احتمال پیش‌بینی کمتر یا مساوی آستانه منفی (beta) باشد:
-            #     هزینه = loss_NP * predicted_prob
-            # - در غیر این صورت، هزینه ترکیبی از bp و bn استفاده می‌شود.
-            local_cost = np.where(self.predicted_probs >= alpha,
-                                  self.loss_PN * (1 - self.predicted_probs),
-                                  np.where(self.predicted_probs <= beta,
-                                           self.loss_NP * self.predicted_probs,
-                                           bp * self.predicted_probs + bn * (1 - self.predicted_probs)))
-            total_cost[i] = np.sum(local_cost)
-            boundary_size[i] = np.sum(alpha - beta)
+        for i in range(num_solutions):
+            # استخراج مقیاس‌های تنظیمی از راه‌حل i
+            scale_fn, scale_fp = population[i]
+            # محاسبه هزینه‌های تعدیلی
+            adj_fn_cost, adj_fp_cost = self.calculate_adjusted_costs(scale_fn, scale_fp)
+            # محاسبه آستانه‌های بالا و پایین
+            upper_threshold, lower_threshold = self.calculate_thresholds(adj_fn_cost, adj_fp_cost)
+            # محاسبه هزینه‌های هر نمونه
+            sample_costs = self.compute_sample_costs(upper_threshold, lower_threshold, adj_fn_cost, adj_fp_cost)
+            # محاسبه مجموع هزینه‌ها و عرض مرز برای راه‌حل i
+            total_costs[i] = np.sum(sample_costs)
+            total_boundary_width[i] = np.sum(upper_threshold - lower_threshold)
 
-        # محدودیت: u + v باید کمتر یا مساوی 1 باشد، به این صورت که
-        # g = u + v - 1 <= 0
-        constraint = x[:, 0] + x[:, 1] - 1.0
-        out["F"] = np.column_stack([total_cost, boundary_size])
+        # محدودیت: مجموع مقیاس‌های تنظیمی باید <= 1 باشد
+        constraint = population[:, 0] + population[:, 1] - 1.0
+        # تعیین اهداف: [هزینه کل، عرض مرز]
+        out["F"] = np.column_stack([total_costs, total_boundary_width])
         out["G"] = constraint.reshape(-1, 1)
 
+def optimize_threshold_scales(predicted_probs, false_pos_cost, false_neg_cost, population_size=20, num_generations=10):
+    # ایجاد نمونه مسئله بهینه‌سازی با داده‌های ورودی
+    problem_instance = ThresholdOptimizationProblem(predicted_probs, false_pos_cost, false_neg_cost)
+    # تعریف الگوریتم NSGA-II با اندازه جمعیت مشخص شده
+    nsga2_algo = NSGA2(pop_size=population_size)
+    # اجرای بهینه‌سازی به تعداد نسل تعیین شده
+    optimization_result = minimize(problem_instance, nsga2_algo, ('n_gen', num_generations), seed=1, verbose=False)
+    # انتخاب بهترین راه‌حل بر اساس مرتب‌سازی lexicographic (ابتدا هزینه کل سپس عرض مرز)
+    objectives = optimization_result.F
+    best_index = np.lexsort((objectives[:, 1], objectives[:, 0]))[0]
+    best_scale_fn, best_scale_fp = optimization_result.X[best_index]
+    return best_scale_fn, best_scale_fp
 
-def nsga2_find_uv(predicted_probs, loss_PN, loss_NP, pop_size=20, generations=10):
-    """
-    بهینه‌سازی پارامترهای u و v با استفاده از NSGA-II.
-
-    ورودی‌ها:
-        - predicted_probs: آرایه احتمال‌های پیش‌بینی شده
-        - loss_PN: آرایه هزینه‌های تصمیم "قبول" (برای نمونه‌های غیرنکول)
-        - loss_NP: آرایه هزینه‌های تصمیم "رد" (برای نمونه‌های نکول)
-        - pop_size: اندازه جمعیت اولیه
-        - generations: تعداد نسل‌های الگوریتم
-    خروجی:
-        - بهترین مقدار u و v به عنوان پارامترهای بهینه
-    """
-    problem = ObjectiveProblem(predicted_probs, loss_PN, loss_NP)
-    algorithm = NSGA2(pop_size=pop_size)
-    res = minimize(problem, algorithm, ('n_gen', generations), seed=1, verbose=False)
-
-    # انتخاب بهترین فرد بر اساس مرتب‌سازی lexicographic:
-    # ابتدا بر اساس f1 و سپس بر اساس f2 مرتب می‌شود.
-    f = res.F
-    idx = np.lexsort((f[:, 1], f[:, 0]))[0]
-    best_u, best_v = res.X[idx]
-    return best_u, best_v
-
-
-# مثال استفاده:
 if __name__ == "__main__":
-    # فرض کنید این‌ها مقادیر نمونه‌ای هستند
-    predicted_probs = np.array([0.1, 0.5, 0.8])
-    loss_PN = np.array([10, 20, 30])
-    loss_NP = np.array([5, 15, 25])
-
-    best_u, best_v = nsga2_find_uv(predicted_probs, loss_PN, loss_NP, pop_size=20, generations=10)
-    print("بهترین u:", best_u)
-    print("بهترین v:", best_v)
+    # داده‌های نمونه برای آزمایش برنامه
+    sample_predicted_probs = np.array([0.1, 0.5, 0.8])
+    sample_false_pos_cost = np.array([10, 20, 30])
+    sample_false_neg_cost = np.array([5, 15, 25])
+    best_scale_fn, best_scale_fp = optimize_threshold_scales(sample_predicted_probs,
+                                                             sample_false_pos_cost,
+                                                             sample_false_neg_cost,
+                                                             population_size=20,
+                                                             num_generations=10)
+    print("Best scale for false negative:", best_scale_fn)
+    print("Best scale for false positive:", best_scale_fp)
