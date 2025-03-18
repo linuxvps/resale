@@ -26,8 +26,10 @@ class ThresholdOptimizationProblem(Problem):
         #   scale_fn + scale_fp <= 1
         super().__init__(
             # تعداد متغیرهای تصمیم: دو متغیر وجود دارد که همان scale_fn و scale_fp هستند.
+            # population 2 ta soton date az in miyad
             n_var=2,
             # تعداد توابع هدف: دو تابع هدف برای بهینه‌سازی تعریف شده است.
+            # الگوریتم سعی می‌کند مجموع هزینه‌ها را کم کند و عرض مرزهای تصمیم‌گیری را حداقل کند تا تصمیم‌گیری بهینه شود.
             n_obj=2,
             # تعداد محدودیت‌ها: تنها یک محدودیت (مجموع scale_fn و scale_fp باید کمتر یا مساوی ۱ باشد).
             n_constr=1,
