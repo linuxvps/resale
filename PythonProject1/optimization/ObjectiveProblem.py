@@ -24,9 +24,18 @@ class ThresholdOptimizationProblem(Problem):
         #   objective2: مجموع اختلاف آستانه‌های بالا و پایین (عرض مرز)
         # محدودیت:
         #   scale_fn + scale_fp <= 1
-        super().__init__(n_var=2, n_obj=2, n_constr=1,
-                         xl=np.array([0.0, 0.0]),  # حداقل مقیاس‌ها
-                         xu=np.array([1.0, 1.0]))  # حداکثر مقیاس‌ها
+        super().__init__(
+            # تعداد متغیرهای تصمیم: دو متغیر وجود دارد که همان scale_fn و scale_fp هستند.
+            n_var=2,
+            # تعداد توابع هدف: دو تابع هدف برای بهینه‌سازی تعریف شده است.
+            n_obj=2,
+            # تعداد محدودیت‌ها: تنها یک محدودیت (مجموع scale_fn و scale_fp باید کمتر یا مساوی ۱ باشد).
+            n_constr=1,
+            # دامنه پایین متغیرهای تصمیم: حداقل مقادیر مجاز برای scale_fn و scale_fp.
+            xl=np.array([0.0, 0.0]),  # حداقل مقیاس‌ها
+            # دامنه بالا متغیرهای تصمیم: حداکثر مقادیر مجاز برای scale_fn و scale_fp.
+            xu=np.array([1.0, 1.0])
+        )
 
     def calculate_adjusted_costs(self, scale_fn, scale_fp):
         # محاسبه هزینه‌های تعدیلی بر اساس مقیاس‌های ورودی
