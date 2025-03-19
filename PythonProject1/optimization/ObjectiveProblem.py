@@ -68,10 +68,10 @@ class ThresholdOptimizationProblem(Problem):
                                          adjusted_fn_cost * self.predicted_probs + adjusted_fp_cost * (1 - self.predicted_probs)))
         return sample_costs
 
-    def _evaluate(self, population, out, *args, **kwargs):
+    def _evaluate(self, solution, out, *args, **kwargs):
         # تعداد راه‌حل‌های موجود در جمعیت
         # تعداد ردیف های یک ماتریس
-        num_solutions = population.shape[0]
+        num_solutions = solution.shape[0]
         # آرایه برای ذخیره مجموع هزینه هر راه‌حل
         total_costs = np.zeros(num_solutions)
         # آرایه برای ذخیره مجموع اختلاف آستانه‌ها (عرض مرز) هر راه‌حل
@@ -79,7 +79,7 @@ class ThresholdOptimizationProblem(Problem):
 
         for i in range(num_solutions):
             # استخراج مقیاس‌های تنظیمی از راه‌حل i
-            scale_fn, scale_fp = population[i]
+            scale_fn, scale_fp = solution[i]
             # محاسبه هزینه‌های تعدیلی
             adj_fn_cost, adj_fp_cost = self.calculate_adjusted_costs(scale_fn, scale_fp)
             # محاسبه آستانه‌های بالا و پایین
@@ -91,7 +91,7 @@ class ThresholdOptimizationProblem(Problem):
             total_boundary_width[i] = np.sum(upper_threshold - lower_threshold)
 
         # محدودیت: مجموع مقیاس‌های تنظیمی باید <= 1 باشد
-        constraint = population[:, 0] + population[:, 1] - 1.0
+        constraint = solution[:, 0] + solution[:, 1] - 1.0
         # تعیین اهداف: [هزینه کل، عرض مرز]
         out["F"] = np.column_stack([total_costs, total_boundary_width])
         out["G"] = constraint.reshape(-1, 1)

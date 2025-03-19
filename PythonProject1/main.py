@@ -32,6 +32,7 @@ def train_lightgbm_model(x_train, y_train, x_test):
     lightgbm_classifier.fit(x_train, y_train)
     print("آموزش مدل به پایان رسید.")
     # دریافت احتمال نکول (کلاس مثبت)
+    # تمام سطرها را انتخاب کن، ولی فقط ستون شماره ۱ را بردار.
     predicted_probabilities = lightgbm_classifier.predict_proba(x_test)[:, 1]
     return predicted_probabilities
 
