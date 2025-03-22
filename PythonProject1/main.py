@@ -22,7 +22,7 @@ def pre_process_data_from_db():
     loan_repository = LoanRepository()
     loan_preprocessor = LoanPreprocessor(imputation_strategy="median")
     loan_data_handler = LoanDataHandler(loan_repository, loan_preprocessor)
-    return loan_data_handler.load_and_process_data(limit_records=50000)
+    return loan_data_handler.load_and_process_data(limit_records=100_000)
 
 
 # ------------------------ آموزش مدل LightGBM ------------------------
