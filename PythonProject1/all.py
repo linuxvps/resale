@@ -1,19 +1,23 @@
 import os
-import pandas as pd
-import numpy as np
-from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, SmallInteger
-from sqlalchemy.orm import declarative_base, Session, sessionmaker
 from datetime import datetime
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from lightgbm import LGBMClassifier
-from sklearn.ensemble import ExtraTreesClassifier, BaggingClassifier
-from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, precision_score, recall_score, f1_score
-from pymoo.core.problem import Problem
-from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.optimize import minimize
 from decimal import Decimal
+
+import numpy as np
+import pandas as pd
+from lightgbm import LGBMClassifier
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.problem import Problem
+from pymoo.optimize import minimize
+from sklearn.ensemble import ExtraTreesClassifier, BaggingClassifier
+from sklearn.feature_selection import RFECV
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, \
+    precision_score, recall_score, f1_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, \
+    SmallInteger
+from sqlalchemy.orm import declarative_base, Session, sessionmaker
 
 # تعریف پایه مدل SQLAlchemy
 Base = declarative_base()
@@ -179,12 +183,33 @@ class LoanPreprocessor:
         print(corr_matrix.to_string())
         return new_data
 
+    def select_features(self, X, y):
+
+        lgbm_estimator = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
+        rfecv = RFECV(estimator=lgbm_estimator, step=1, cv=5, scoring='accuracy', n_jobs=-1, verbose=0)
+        rfecv.fit(X, y)
+
+        selected_features = list(X.columns[rfecv.support_])
+        for col in protected_columns:
+            if col not in selected_features and col in X.columns:
+                selected_features.append(col)
+
+        # محاسبه ویژگی‌های انتخاب نشده
+        not_selected_features = [col for col in X.columns if col not in selected_features]
+
+        print("ویژگی‌های انتخاب شده:", selected_features)
+        print("ویژگی‌های انتخاب نشده:", not_selected_features)
+
+        return X.loc[:, selected_features]
+
+
     def preprocess(self, df: pd.DataFrame, label_column: str = "status") -> (pd.DataFrame, pd.Series):
         df = self.convert_labels(df, label_column)
         df = self.convert_dataframe_columns(df)
         df.drop(columns=["create_date"], errors="ignore", inplace=True)
         df = self.remove_highly_correlated_features(df, threshold=0.9, class_column=label_column)
         df_imputed = pd.DataFrame(self.imputer.fit_transform(df), columns=df.columns)
+        # جداسازی ویژگی‌ها و برچسب‌ها
         X = df_imputed.drop(columns=[label_column])
         y = df_imputed[label_column]
         return X, y
@@ -199,9 +224,14 @@ class LoanDataHandler:
 
     def load_and_process_data(self, limit_records: int = 10000) -> (pd.DataFrame, pd.Series, pd.DataFrame, pd.Series):
         df = self.repository.fetch_loans(limit_records)
-        x, y = self.preprocessor.preprocess(df)
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
-        return x_train, y_train, x_test, y_test
+        X, y = self.preprocessor.preprocess(df)
+        # تقسیم داده‌ها به آموزش و تست
+        x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # انتخاب ویژگی‌ها با استفاده از RFECV روی مجموعه آموزشی
+        x_train_selected = self.preprocessor.select_features(x_train, y_train)
+        # اعمال همان انتخاب ویژگی روی مجموعه تست
+        x_test_selected = x_test[x_train_selected.columns]
+        return x_train_selected, y_train, x_test_selected, y_test
 
 # ==================== تعریف کلاس ThresholdOptimizationProblem و تابع optimize_threshold_scales ====================
 class ThresholdOptimizationProblem(Problem):
