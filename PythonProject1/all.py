@@ -21,6 +21,7 @@ from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date,
     SmallInteger
 from sqlalchemy.orm import declarative_base, Session, sessionmaker
 from imblearn.over_sampling import SMOTE  # اضافه شده برای استفاده از SMOTE oversampling
+from sklearn.neighbors import KNeighborsClassifier
 
 # تعریف پایه مدل SQLAlchemy
 Base = declarative_base()
@@ -425,6 +426,31 @@ def apply_smote(X, y, random_state=42):
     return X_resampled, y_resampled
 
 
+
+
+def evaluate_knn_overall():
+    # دریافت داده‌ها از پایگاه داده و پیش‌پردازش
+    x_train, y_train, x_test, y_test = pre_process_data_from_db()
+
+    # محاسبه هزینه‌های مالی (false_positive_loss و false_negative_loss) از داده‌های cash_flow
+    cash_flow_data = x_test[protected_columns]
+    false_positive_loss, false_negative_loss = compute_financial_losses(cash_flow_data)
+
+    # ایجاد و آموزش مدل KNN با 5 همسایه
+    knn = KNeighborsClassifier(n_neighbors=5)
+    knn.fit(x_train, y_train)
+
+    # پیش‌بینی بر روی داده‌های آزمایشی
+    predicted_labels = knn.predict(x_test)
+
+    # ارزیابی عملکرد مدل KNN با استفاده از متد evaluate_model_performance
+    result = evaluate_model_performance(np.array(y_test), np.array(predicted_labels), false_positive_loss,
+                                        false_negative_loss)
+
+    return result
+
+
+
 # ==================== اجرای کل فرآیند ====================
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"
@@ -455,3 +481,7 @@ if __name__ == "__main__":
                                              false_positive_loss_test, false_negative_loss_test)
 
     print(result)
+
+    print("knn")
+    res = evaluate_knn_overall()
+    print(res)
