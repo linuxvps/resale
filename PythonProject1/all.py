@@ -18,6 +18,7 @@ from sklearn.preprocessing import LabelEncoder
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, \
     SmallInteger
 from sqlalchemy.orm import declarative_base, Session, sessionmaker
+from imblearn.over_sampling import SMOTE  # اضافه شده برای استفاده از SMOTE oversampling
 
 # تعریف پایه مدل SQLAlchemy
 Base = declarative_base()
@@ -353,10 +354,25 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
     print("Classification Report:\n", classification_rep)
     print("Decision Cost:", decision_cost)
 
+def apply_smote(X, y, random_state=42):
+
+    print("تعداد نمونه‌های آموزشی قبل از SMOTE:")
+    print(pd.Series(y).value_counts())
+
+    sm = SMOTE(random_state=random_state)
+    X_resampled, y_resampled = sm.fit_resample(X, y)
+
+    print("تعداد نمونه‌های آموزشی بعد از SMOTE:")
+    print(pd.Series(y_resampled).value_counts())
+    return X_resampled, y_resampled
+
+
 # ==================== اجرای کل فرآیند ====================
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"
     x_train, y_train, x_test, y_test = pre_process_data_from_db()
+    # صدا زدن تابع apply_smote برای متعادل‌سازی داده‌های آموزشی و نمایش لاگ
+    x_train, y_train = apply_smote(x_train, y_train)
     predicted_probabilities_test = train_lightgbm_model(x_train, y_train, x_test)
     cash_flow_data = x_test[protected_columns]
     false_positive_loss_test, false_negative_loss_test = compute_financial_losses(cash_flow_data)
