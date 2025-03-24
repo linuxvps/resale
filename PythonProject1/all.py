@@ -384,12 +384,30 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
     print("Decision Cost:", decision_cost)
 
     # محاسبه FM با b=1 (که همان F1-Score است)
-    fm = calc_fm(precision, recall)
+    fm = calc_fm(precision, recall, b=1)
     # محاسبه GM
     gm = calc_gm(true_labels, predicted_labels)
 
     print("fm", fm)
     print("gm", gm)
+
+    # ذخیره تمامی مقادیر در یک متغیر به صورت دیکشنری
+    results = {
+        "Balanced Accuracy": balanced_accuracy,
+        "AUC": area_under_curve,
+        "Precision": precision,
+        "Recall": recall,
+        "F1 Score": f1,
+        "FM": fm,
+        "GM": gm,
+        "Decision Cost": decision_cost,
+        "TP": cm[1, 1],
+        "TN": cm[0, 0],
+        "FP": cm[0, 1],
+        "FN": cm[1, 0]
+    }
+
+    return results
 
 
 
@@ -433,4 +451,7 @@ if __name__ == "__main__":
     x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
     predicted_labels_for_boundary_samples = ensemble_bagging_classifier.predict(x_test_boundary_samples)
     three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
-    evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels), false_positive_loss_test, false_negative_loss_test)
+    result = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
+                                             false_positive_loss_test, false_negative_loss_test)
+
+    print(result)
