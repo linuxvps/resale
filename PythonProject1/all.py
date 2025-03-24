@@ -1,6 +1,8 @@
 import os
 from datetime import datetime
 from decimal import Decimal
+from math import sqrt
+
 
 import numpy as np
 import pandas as pd
@@ -98,6 +100,26 @@ class LoanFeatures(Base):
 
     def __repr__(self):
         return f"<LoanFeatures(feature_id={self.feature_id}, column_name='{self.column_name}', table_name='{self.table_name}', importance_level={self.importance_level})>"
+
+
+
+def calc_fm(precision, recall, b=1):
+    if (precision + recall) == 0:
+        return 0.0
+    return (1 + b**2) * (precision * recall) / (b**2 * precision + recall)
+
+
+def calc_gm(true_labels, predicted_labels):
+    cm = confusion_matrix(true_labels, predicted_labels)
+    TN, FP, FN, TP = cm[0, 0], cm[0, 1], cm[1, 0], cm[1, 1]
+
+    if (TP + FN) == 0 or (TN + FP) == 0:
+        return 0.0
+    sensitivity = TP / (TP + FN)
+    specificity = TN / (TN + FP)
+    return sqrt(sensitivity * specificity)
+
+
 
 # ==================== تعریف کلاس LoanRepository ====================
 class LoanRepository:
@@ -361,6 +383,16 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
 
     print("Classification Report:\n", classification_rep)
     print("Decision Cost:", decision_cost)
+
+    # محاسبه FM با b=1 (که همان F1-Score است)
+    fm = calc_fm(precision, recall)
+    # محاسبه GM
+    gm = calc_gm(true_labels, predicted_labels)
+
+    print("fm", fm)
+    print("gm", gm)
+
+
 
 
 def apply_smote(X, y, random_state=42):
