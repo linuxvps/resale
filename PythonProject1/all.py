@@ -356,8 +356,8 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
 # ==================== اجرای کل فرآیند ====================
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"
-    x_train_resampled, y_train_resampled, x_test, y_test = pre_process_data_from_db()
-    predicted_probabilities_test = train_lightgbm_model(x_train_resampled, y_train_resampled, x_test)
+    x_train, y_train, x_test, y_test = pre_process_data_from_db()
+    predicted_probabilities_test = train_lightgbm_model(x_train, y_train, x_test)
     cash_flow_data = x_test[protected_columns]
     false_positive_loss_test, false_negative_loss_test = compute_financial_losses(cash_flow_data)
     optimized_upper_threshold_scale, optimized_lower_threshold_scale = optimize_threshold_scales(
@@ -373,7 +373,7 @@ if __name__ == "__main__":
         n_estimators=10,
         random_state=42
     )
-    ensemble_bagging_classifier.fit(x_train_resampled, y_train_resampled)
+    ensemble_bagging_classifier.fit(x_train, y_train)
     x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
     predicted_labels_for_boundary_samples = ensemble_bagging_classifier.predict(x_test_boundary_samples)
     three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
