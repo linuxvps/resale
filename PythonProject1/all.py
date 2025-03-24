@@ -333,6 +333,7 @@ def apply_three_way_decision(predicted_probabilities, false_positive_loss, false
     uncertain_boundary_sample_indices = np.where(three_way_decision_labels == -1)[0]
     return three_way_decision_labels, uncertain_boundary_sample_indices
 
+
 def evaluate_model_performance(true_labels, predicted_labels, false_positive_loss, false_negative_loss):
     print("\n" * 3)
     print("ارزیابی عملکرد کلی مدل")
@@ -342,17 +343,25 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
     precision = precision_score(true_labels, predicted_labels)
     recall = recall_score(true_labels, predicted_labels)
     f1 = f1_score(true_labels, predicted_labels)
-    confusion_mat = confusion_matrix(true_labels, predicted_labels)
+    cm = confusion_matrix(true_labels, predicted_labels)
     classification_rep = classification_report(true_labels, predicted_labels)
-    decision_cost = np.sum(false_negative_loss[(true_labels == 1) & (predicted_labels == 0)]) + np.sum(false_positive_loss[(true_labels == 0) & (predicted_labels == 1)])
+    decision_cost = np.sum(false_negative_loss[(true_labels == 1) & (predicted_labels == 0)]) + \
+                    np.sum(false_positive_loss[(true_labels == 0) & (predicted_labels == 1)])
+
     print("Balanced Accuracy:", balanced_accuracy)
     print("AUC:", area_under_curve)
     print("Precision:", precision)
     print("Recall:", recall)
     print("F1 Score:", f1)
-    print("Confusion Matrix:\n", confusion_mat)
+
+    # چاپ ماتریس سردرگمی به فرم مورد نظر
+    print("Confusion Matrix:")
+    print(f"[[TN: {cm[0, 0]}, FP: {cm[0, 1]}],")
+    print(f" [FN: {cm[1, 0]}, TP: {cm[1, 1]}]]")
+
     print("Classification Report:\n", classification_rep)
     print("Decision Cost:", decision_cost)
+
 
 def apply_smote(X, y, random_state=42):
 
