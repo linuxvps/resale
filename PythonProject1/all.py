@@ -377,7 +377,7 @@ if __name__ == "__main__":
     cash_flow_data = x_test[protected_columns]
     false_positive_loss_test, false_negative_loss_test = compute_financial_losses(cash_flow_data)
     optimized_upper_threshold_scale, optimized_lower_threshold_scale = optimize_threshold_scales(
-        predicted_probabilities_test, false_positive_loss_test, false_negative_loss_test, population_size=20, num_generations=10
+        predicted_probabilities_test, false_positive_loss_test, false_negative_loss_test, population_size=100, num_generations=200
     )
     print("بهترین مقدار برای مقیاس آستانه بالا:", Decimal(optimized_upper_threshold_scale))
     print("بهترین مقدار برای مقیاس آستانه پایین:", Decimal(optimized_lower_threshold_scale))
