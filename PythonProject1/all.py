@@ -3,31 +3,40 @@ from datetime import datetime
 from decimal import Decimal
 from math import sqrt
 
-
 import numpy as np
 import pandas as pd
+from imblearn.over_sampling import SMOTE  # اضافه شده برای استفاده از SMOTE oversampling
 from lightgbm import LGBMClassifier
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
-from sklearn.ensemble import ExtraTreesClassifier, BaggingClassifier
+from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier, \
+    RandomForestClassifier, StackingClassifier
+from sklearn.ensemble import BaggingClassifier
 from sklearn.feature_selection import RFECV
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import balanced_accuracy_score, roc_auc_score, classification_report, confusion_matrix, \
-    precision_score, recall_score, f1_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, f1_score
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score, roc_auc_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import SVC
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, \
     SmallInteger
 from sqlalchemy.orm import declarative_base, Session, sessionmaker
-from imblearn.over_sampling import SMOTE  # اضافه شده برای استفاده از SMOTE oversampling
-from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBClassifier
 
 # تعریف پایه مدل SQLAlchemy
 Base = declarative_base()
 
 # protected_columns از قبل تعریف شده برای استفاده در پیش‌پردازش
 protected_columns = ['approval_amount', 'interest_amount']
+
+combined_results = {}
+
 
 # ==================== تعریف مدل ParsianLoan ====================
 class ParsianLoan(Base):
@@ -427,34 +436,55 @@ def apply_smote(X, y, random_state=42):
 
 
 
-
-def evaluate_knn_overall():
-    # دریافت داده‌ها از پایگاه داده و پیش‌پردازش
-    x_train, y_train, x_test, y_test = pre_process_data_from_db()
-
-    # محاسبه هزینه‌های مالی (false_positive_loss و false_negative_loss) از داده‌های cash_flow
-    cash_flow_data = x_test[protected_columns]
-    false_positive_loss, false_negative_loss = compute_financial_losses(cash_flow_data)
-
-    # ایجاد و آموزش مدل KNN با 5 همسایه
-    knn = KNeighborsClassifier(n_neighbors=5)
-    knn.fit(x_train, y_train)
-
-    # پیش‌بینی بر روی داده‌های آزمایشی
-    predicted_labels = knn.predict(x_test)
-
-    # ارزیابی عملکرد مدل KNN با استفاده از متد evaluate_model_performance
-    result = evaluate_model_performance(np.array(y_test), np.array(predicted_labels), false_positive_loss,
-                                        false_negative_loss)
-
-    return result
+def train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1):
+    model.fit(x_train, y_train)
+    y_pred = model.predict(x_test)
+    try:
+        y_prob = model.predict_proba(x_test)
+    except:
+        y_prob = None
+    return evaluate_model(y_test, y_pred, y_prob, b, cost_fp, cost_fn)
 
 
+# تابع جامع ارزیابی مدل که معیارهای مختلفی مانند Balanced Accuracy، AUC، F‑Measure، G‑Mean، هزینه تصمیم‌گیری و تعداد TP، TN، FP، FN را محاسبه می‌کند.
+def evaluate_model(y_true, y_pred, y_prob=None, b=1, cost_fp=1, cost_fn=1):
+    b_acc = balanced_accuracy_score(y_true, y_pred)
+    auc = None
+    if y_prob is not None:
+        try:
+            if len(y_prob.shape) > 1 and y_prob.shape[1] > 1:
+                y_score = y_prob[:, 1]
+            else:
+                y_score = y_prob
+            auc = roc_auc_score(y_true, y_score)
+        except Exception as e:
+            auc = None
+    prec = precision_score(y_true, y_pred, zero_division=0)
+    rec = recall_score(y_true, y_pred, zero_division=0)
+    fm = calc_fm(prec, rec, b)
+    gm = calc_gm(y_true, y_pred)
+    cm = confusion_matrix(y_true, y_pred)
+    TN, FP, FN, TP = cm[0, 0], cm[0, 1], cm[1, 0], cm[1, 1]
+    cost = FP * cost_fp + FN * cost_fn
+    metrics = {
+        "Balanced Accuracy": b_acc,
+        "AUC": auc,
+        "F-Measure": fm,
+        "G-Mean": gm,
+        "Cost": cost,
+        "TP": TP,
+        "TN": TN,
+        "FP": FP,
+        "FN": FN
+    }
+    return metrics
 
 # ==================== اجرای کل فرآیند ====================
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"
     x_train, y_train, x_test, y_test = pre_process_data_from_db()
+    original_data = { "x_train": x_train.copy(), "y_train": y_train.copy(), "x_test": x_test.copy(), "y_test": y_test.copy() }
+
     # صدا زدن تابع apply_smote برای متعادل‌سازی داده‌های آموزشی و نمایش لاگ
     x_train, y_train = apply_smote(x_train, y_train)
     predicted_probabilities_test = train_lightgbm_model(x_train, y_train, x_test)
@@ -477,11 +507,36 @@ if __name__ == "__main__":
     x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
     predicted_labels_for_boundary_samples = ensemble_bagging_classifier.predict(x_test_boundary_samples)
     three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
-    result = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
+    combined_results["Proposed Model"] = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
                                              false_positive_loss_test, false_negative_loss_test)
 
-    print(result)
 
-    print("knn")
-    res = evaluate_knn_overall()
-    print(res)
+    # تعریف مدل‌های مختلف در یک دیکشنری
+    models = {
+        "Bayes": GaussianNB(),
+        "KNN": KNeighborsClassifier(),
+        "LR": LogisticRegression(),
+        "NN": MLPClassifier(max_iter=300),
+        "AdaBoost": AdaBoostClassifier(),
+        "ERT": ExtraTreesClassifier(),
+        "GBDT": GradientBoostingClassifier(),
+        "LGBM": LGBMClassifier(),
+        "RF": RandomForestClassifier(),
+        "XGB": XGBClassifier(use_label_encoder=False, eval_metric='logloss'),
+        "Stacking": StackingClassifier(estimators=[
+            ('lr', LogisticRegression()),
+            ('knn', KNeighborsClassifier())
+        ], final_estimator=RandomForestClassifier())
+    }
+
+    results = {}
+    # آموزش و ارزیابی هر مدل
+    for name, model in models.items():
+        print(f"در حال آموزش و ارزیابی مدل: {name}")
+        metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
+        results[name] = metrics
+        print(f"نتایج مدل {name}: {metrics}\n")
+
+    print("نتایج کلی:")
+    for name, metric in results.items():
+        print(f"{name}: {metric}")
