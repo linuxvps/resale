@@ -441,7 +441,7 @@ def train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, 
     y_pred = model.predict(x_test)
     try:
         y_prob = model.predict_proba(x_test)
-    except:
+    except Exception:
         y_prob = None
     return evaluate_model(y_test, y_pred, y_prob, b, cost_fp, cost_fn)
 
@@ -512,19 +512,21 @@ if __name__ == "__main__":
 
 
     # تعریف مدل‌های مختلف در یک دیکشنری
+    # تعریف مدل‌های مختلف با تنظیماتی برای رفع هشدارها
     models = {
         "Bayes": GaussianNB(),
         "KNN": KNeighborsClassifier(),
-        "LR": LogisticRegression(),
+        "LR": LogisticRegression(max_iter=1000),  # افزایش max_iter برای همگام‌سازی
         "NN": MLPClassifier(max_iter=300),
-        "AdaBoost": AdaBoostClassifier(),
+        # "SVM": SVC(probability=True),
+        "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),  # استفاده از الگوریتم SAMME
         "ERT": ExtraTreesClassifier(),
         "GBDT": GradientBoostingClassifier(),
-        "LGBM": LGBMClassifier(),
+        "LGBM": LGBMClassifier(verbose=-1),  # کاهش پیام‌های خروجی
         "RF": RandomForestClassifier(),
-        "XGB": XGBClassifier(use_label_encoder=False, eval_metric='logloss'),
+        "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),  # حذف پارامتر use_label_encoder و کاهش verbosity
         "Stacking": StackingClassifier(estimators=[
-            ('lr', LogisticRegression()),
+            ('lr', LogisticRegression(max_iter=1000)),  # افزایش max_iter برای همگام‌سازی
             ('knn', KNeighborsClassifier())
         ], final_estimator=RandomForestClassifier())
     }

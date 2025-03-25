@@ -1,18 +1,20 @@
-import numpy as np
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neural_network import MLPClassifier
-from sklearn.svm import SVC
-from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier, RandomForestClassifier, StackingClassifier
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
-from sklearn.metrics import confusion_matrix, balanced_accuracy_score, roc_auc_score, precision_score, recall_score
 from math import sqrt
 
-# تابع محاسبه F‑Measure؛ اگر b=1 معادل F1-Score خواهد بود.
+from lightgbm import LGBMClassifier
+from sklearn.datasets import make_classification
+from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier, \
+    RandomForestClassifier, StackingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score, roc_auc_score, precision_score, recall_score
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
+
+
+# تابع محاسبه F‑Measure؛ اگر b=1 باشد معادل F1-Score خواهد بود.
 def calc_fm(precision, recall, b=1):
     if (precision + recall) == 0:
         return 0.0
@@ -68,32 +70,32 @@ def train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, 
     y_pred = model.predict(x_test)
     try:
         y_prob = model.predict_proba(x_test)
-    except:
+    except Exception:
         y_prob = None
     return evaluate_model(y_test, y_pred, y_prob, b, cost_fp, cost_fn)
 
 if __name__ == "__main__":
     # تولید داده‌های مصنوعی برای طبقه‌بندی دودویی
-    X, y = make_classification(n_samples=1000, n_features=20, n_informative=2, n_redundant=10,
+    X, y = make_classification(n_samples=2000, n_features=20, n_informative=2, n_redundant=10,
                                n_classes=2, random_state=42)
     # تقسیم داده‌ها به آموزش (70٪) و تست (30٪)
     x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-    # تعریف مدل‌های مختلف در یک دیکشنری
+    # تعریف مدل‌های مختلف با تنظیماتی برای رفع هشدارها
     models = {
         "Bayes": GaussianNB(),
         "KNN": KNeighborsClassifier(),
-        "LR": LogisticRegression(),
+        "LR": LogisticRegression(max_iter=1000),  # افزایش max_iter برای همگام‌سازی
         "NN": MLPClassifier(max_iter=300),
         "SVM": SVC(probability=True),
-        "AdaBoost": AdaBoostClassifier(),
+        "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),  # استفاده از الگوریتم SAMME
         "ERT": ExtraTreesClassifier(),
         "GBDT": GradientBoostingClassifier(),
-        "LGBM": LGBMClassifier(),
+        "LGBM": LGBMClassifier(verbose=-1),  # کاهش پیام‌های خروجی
         "RF": RandomForestClassifier(),
-        "XGB": XGBClassifier(use_label_encoder=False, eval_metric='logloss'),
+        "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),  # حذف پارامتر use_label_encoder و کاهش verbosity
         "Stacking": StackingClassifier(estimators=[
-            ('lr', LogisticRegression()),
+            ('lr', LogisticRegression(max_iter=1000)),  # افزایش max_iter برای همگام‌سازی
             ('knn', KNeighborsClassifier())
         ], final_estimator=RandomForestClassifier())
     }
