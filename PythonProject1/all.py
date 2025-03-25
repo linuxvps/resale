@@ -10,6 +10,7 @@ from lightgbm import LGBMClassifier
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier, \
     RandomForestClassifier, StackingClassifier
 from sklearn.ensemble import BaggingClassifier
@@ -526,7 +527,7 @@ if __name__ == "__main__":
         "RF": RandomForestClassifier(),
         "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),  # حذف پارامتر use_label_encoder و کاهش verbosity
         "Stacking": StackingClassifier(estimators=[
-            ('lr', LogisticRegression(max_iter=1000)),  # افزایش max_iter برای همگام‌سازی
+            ('lda', LinearDiscriminantAnalysis()),
             ('knn', KNeighborsClassifier())
         ], final_estimator=RandomForestClassifier())
     }

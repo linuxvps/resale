@@ -14,7 +14,7 @@ from sklearn.svm import SVC
 from xgboost import XGBClassifier
 
 
-# تابع محاسبه F‑Measure؛ اگر b=1 باشد معادل F1-Score خواهد بود.
+# تابع محاسبه F‑Measure؛ اگر b=1 معادل F1-Score خواهد بود.
 def calc_fm(precision, recall, b=1):
     if (precision + recall) == 0:
         return 0.0
@@ -31,7 +31,7 @@ def calc_gm(y_true, y_pred):
     specificity = TN / (TN + FP)
     return sqrt(sensitivity * specificity)
 
-# تابع جامع ارزیابی مدل که معیارهای مختلفی مانند Balanced Accuracy، AUC، F‑Measure، G‑Mean، هزینه تصمیم‌گیری و تعداد TP، TN، FP، FN را محاسبه می‌کند.
+# تابع جامع ارزیابی مدل
 def evaluate_model(y_true, y_pred, y_prob=None, b=1, cost_fp=1, cost_fn=1):
     b_acc = balanced_accuracy_score(y_true, y_pred)
     auc = None
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         "RF": RandomForestClassifier(),
         "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),  # حذف پارامتر use_label_encoder و کاهش verbosity
         "Stacking": StackingClassifier(estimators=[
-            ('lr', LogisticRegression(max_iter=1000)),  # افزایش max_iter برای همگام‌سازی
+            ('lr', LogisticRegression(max_iter=1000)),
             ('knn', KNeighborsClassifier())
         ], final_estimator=RandomForestClassifier())
     }
