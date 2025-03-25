@@ -508,10 +508,8 @@ if __name__ == "__main__":
     x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
     predicted_labels_for_boundary_samples = ensemble_bagging_classifier.predict(x_test_boundary_samples)
     three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
-    combined_results["Proposed Model"] = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
+    myRes = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
                                              false_positive_loss_test, false_negative_loss_test)
-
-
     # تعریف مدل‌های مختلف در یک دیکشنری
     # تعریف مدل‌های مختلف با تنظیماتی برای رفع هشدارها
     models = {
@@ -538,6 +536,9 @@ if __name__ == "__main__":
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
         results[name] = metrics
         print(f"نتایج مدل {name}: {metrics}\n")
+
+    # results["myModel"] =  evaluate_model(np.array(y_test), np.array(three_way_decision_labels), y_prob=None, b=1, cost_fp=1, cost_fn=1)
+    results["myModel"] = { "Balanced Accuracy": myRes["Balanced Accuracy"], "AUC": myRes["AUC"], "F-Measure": myRes["FM"], "G-Mean": myRes["GM"], "Cost": myRes["Decision Cost"], "TP": myRes["TP"], "TN": myRes["TN"], "FP": myRes["FP"], "FN": myRes["FN"] }
 
     print("نتایج کلی:")
     for name, metric in results.items():
