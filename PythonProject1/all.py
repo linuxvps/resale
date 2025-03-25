@@ -519,7 +519,6 @@ if __name__ == "__main__":
         "KNN": KNeighborsClassifier(),
         "LR": LogisticRegression(max_iter=1000),  # افزایش max_iter برای همگام‌سازی
         "NN": MLPClassifier(max_iter=300),
-        # "SVM": SVC(probability=True),
         "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),  # استفاده از الگوریتم SAMME
         "ERT": ExtraTreesClassifier(),
         "GBDT": GradientBoostingClassifier(),
