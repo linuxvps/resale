@@ -112,13 +112,8 @@ class LoanFeatures(Base):
     def __repr__(self):
         return f"<LoanFeatures(feature_id={self.feature_id}, column_name='{self.column_name}', table_name='{self.table_name}', importance_level={self.importance_level})>"
 
-
-
-
 # ==================== تعریف کلاس LoanRepository ====================
 class LoanRepository:
-    """مدیریت عملیات خواندن داده‌ها از پایگاه داده."""
-
     def __init__(self):
         self.session = self.create_database_session()
 
@@ -140,8 +135,6 @@ class LoanRepository:
 
 # ==================== تعریف کلاس LoanPreprocessor ====================
 class LoanPreprocessor:
-    """کلاس مسئول پیش‌پردازش داده‌های وام."""
-
     def __init__(self, imputation_strategy: str = "mean"):
         self.imputer = SimpleImputer(strategy=imputation_strategy)
 
@@ -233,8 +226,6 @@ class LoanPreprocessor:
 
 # ==================== تعریف کلاس LoanDataHandler ====================
 class LoanDataHandler:
-    """مدیریت دریافت، پردازش و تقسیم داده‌های وام به مجموعه‌های آموزش و تست."""
-
     def __init__(self, repository: LoanRepository, preprocessor: LoanPreprocessor):
         self.repository = repository
         self.preprocessor = preprocessor
@@ -252,9 +243,6 @@ class LoanDataHandler:
 
 # ==================== تعریف کلاس ThresholdOptimizationProblem و تابع optimize_threshold_scales ====================
 class ThresholdOptimizationProblem(Problem):
-    """
-    مسئله تعیین مقیاس‌های تنظیمی برای محاسبه آستانه‌های تصمیم‌گیری.
-    """
 
     def __init__(self, predicted_probs, false_pos_cost, false_neg_cost):
         self.predicted_probs = predicted_probs
