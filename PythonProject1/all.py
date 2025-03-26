@@ -24,21 +24,14 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder
-from sklearn.svm import SVC
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, \
     SmallInteger
 from sqlalchemy.orm import declarative_base, Session, sessionmaker
 from xgboost import XGBClassifier
 
-# تعریف پایه مدل SQLAlchemy
 Base = declarative_base()
 
-# protected_columns از قبل تعریف شده برای استفاده در پیش‌پردازش
 protected_columns = ['approval_amount', 'interest_amount']
-
-combined_results = {}
-
-
 # ==================== تعریف مدل ParsianLoan ====================
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
@@ -355,9 +348,7 @@ def calc_gm(true_labels, predicted_labels):
 
 
 def evaluate_model_performance(true_labels, predicted_labels, false_positive_loss, false_negative_loss):
-    print("\n" * 3)
-    print("ارزیابی عملکرد کلی مدل")
-    print("\n" * 3)
+    print("\n" * 3 + "ارزیابی عملکرد کلی مدل" + "\n" * 3)
     balanced_accuracy = balanced_accuracy_score(true_labels, predicted_labels)
     area_under_curve = roc_auc_score(true_labels, predicted_labels)
     precision = precision_score(true_labels, predicted_labels)
@@ -522,7 +513,6 @@ if __name__ == "__main__":
         results[name] = metrics
         print(f"نتایج مدل {name}: {metrics}\n")
 
-    # results["myModel"] =  evaluate_model(np.array(y_test), np.array(three_way_decision_labels), y_prob=None, b=1, cost_fp=1, cost_fn=1)
     results["myModel"] = { "Balanced Accuracy": myRes["Balanced Accuracy"], "AUC": myRes["AUC"], "F-Measure": myRes["FM"], "G-Mean": myRes["GM"], "Cost": myRes["Decision Cost"], "TP": myRes["TP"], "TN": myRes["TN"], "FP": myRes["FP"], "FN": myRes["FN"] }
 
     print("نتایج کلی:")
