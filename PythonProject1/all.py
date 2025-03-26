@@ -5,7 +5,7 @@ from math import sqrt
 
 import numpy as np
 import pandas as pd
-from imblearn.over_sampling import SMOTE  # اضافه شده برای استفاده از SMOTE oversampling
+from imblearn.over_sampling import SMOTE
 from lightgbm import LGBMClassifier
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
