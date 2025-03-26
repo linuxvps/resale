@@ -518,7 +518,6 @@ if __name__ == "__main__":
     }
 
     results = {}
-    # آموزش و ارزیابی هر مدل
     for name, model in models.items():
         print(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
