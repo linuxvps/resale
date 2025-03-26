@@ -498,19 +498,17 @@ if __name__ == "__main__":
     three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
     myRes = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
                                              false_positive_loss_test, false_negative_loss_test)
-    # تعریف مدل‌های مختلف در یک دیکشنری
-    # تعریف مدل‌های مختلف با تنظیماتی برای رفع هشدارها
     models = {
         "Bayes": GaussianNB(),
         "KNN": KNeighborsClassifier(),
-        "LR": LogisticRegression(max_iter=1000),  # افزایش max_iter برای همگام‌سازی
+        "LR": LogisticRegression(max_iter=1000),
         "NN": MLPClassifier(max_iter=300),
-        "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),  # استفاده از الگوریتم SAMME
+        "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),
         "ERT": ExtraTreesClassifier(),
         "GBDT": GradientBoostingClassifier(),
-        "LGBM": LGBMClassifier(verbose=-1),  # کاهش پیام‌های خروجی
+        "LGBM": LGBMClassifier(verbose=-1),
         "RF": RandomForestClassifier(),
-        "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),  # حذف پارامتر use_label_encoder و کاهش verbosity
+        "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
         "Stacking": StackingClassifier(estimators=[
             ('lda', LinearDiscriminantAnalysis()),
             ('knn', KNeighborsClassifier())
