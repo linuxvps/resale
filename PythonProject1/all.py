@@ -32,6 +32,7 @@ from xgboost import XGBClassifier
 Base = declarative_base()
 
 protected_columns = ['approval_amount', 'interest_amount']
+results = {}
 # ==================== تعریف مدل ParsianLoan ====================
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
@@ -506,7 +507,6 @@ if __name__ == "__main__":
         ], final_estimator=RandomForestClassifier())
     }
 
-    results = {}
     for name, model in models.items():
         print(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
