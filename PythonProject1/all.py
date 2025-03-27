@@ -515,7 +515,12 @@ if __name__ == "__main__":
         "Stacking": StackingClassifier(estimators=[
             ('lda', LinearDiscriminantAnalysis()),
             ('knn', KNeighborsClassifier())
-        ], final_estimator=RandomForestClassifier())
+        ], final_estimator=RandomForestClassifier()),
+        "Bagging": BaggingClassifier(
+            estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
+            n_estimators=10,
+            random_state=42
+        )
     }
 
     for name, model in models.items():
