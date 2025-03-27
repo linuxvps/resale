@@ -494,8 +494,12 @@ if __name__ == "__main__":
         predicted_labels_for_boundary_samples = classifier.predict(x_test_boundary_samples)
         three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
 
-    myModelEvaluation = evaluate_model(np.array(y_test), np.array(three_way_decision_labels),y_prob=classifier.predict_proba(x_test),
-                           false_positive_loss=false_positive_loss_test, false_negative_loss=false_negative_loss_test)
+    myModelEvaluation = evaluate_model(
+        np.array(y_test),
+        np.array(three_way_decision_labels),
+        y_prob=classifier.predict_proba(x_test),
+        false_positive_loss=false_positive_loss_test,
+        false_negative_loss=false_negative_loss_test)
 
     models = {
         "Bayes": GaussianNB(),
@@ -513,6 +517,7 @@ if __name__ == "__main__":
             ('knn', KNeighborsClassifier())
         ], final_estimator=RandomForestClassifier())
     }
+
     for name, model in models.items():
         logging.debug(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
