@@ -496,7 +496,8 @@ if __name__ == "__main__":
         np.array(three_way_decision_labels),
         y_prob=classifier.predict_proba(x_test),
         false_positive_loss=false_positive_loss_test,
-        false_negative_loss=false_negative_loss_test)
+        false_negative_loss=false_negative_loss_test
+    )
 
     models = {
         "Bayes": GaussianNB(),
