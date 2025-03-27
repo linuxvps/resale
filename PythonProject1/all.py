@@ -29,7 +29,29 @@ from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date,
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xgboost import XGBClassifier
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from colorlog import ColoredFormatter
+import logging
+
+formatter = ColoredFormatter(
+    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG':    'cyan',
+        'INFO':     'white',
+        'WARNING':  'yellow',
+        'ERROR':    'red',
+        'CRITICAL': 'bold_red',
+    }
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
 
 Base = declarative_base()
 protected_columns = ['approval_amount', 'interest_amount']
@@ -412,7 +434,7 @@ def evaluate_model(y_true, y_pred, y_prob=None, b=1, cost_fp=1, cost_fn=1, false
         "FP": FP,
         "FN": FN
     }
-    logging.info("نتایج ارزیابی مدل:")
+    logging.warning("نتایج ارزیابی مدل:")
     logging.info(f"Balanced Accuracy: {b_acc}")
     logging.info(f"AUC: {auc}")
     logging.info(f"Precision: {prec}")
@@ -472,7 +494,7 @@ if __name__ == "__main__":
         predicted_labels_for_boundary_samples = classifier.predict(x_test_boundary_samples)
         three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
 
-    myRes = evaluate_model(np.array(y_test), np.array(three_way_decision_labels),y_prob=classifier.predict_proba(x_test),
+    myModelEvaluation = evaluate_model(np.array(y_test), np.array(three_way_decision_labels),y_prob=classifier.predict_proba(x_test),
                            false_positive_loss=false_positive_loss_test, false_negative_loss=false_negative_loss_test)
 
     models = {
@@ -492,22 +514,13 @@ if __name__ == "__main__":
         ], final_estimator=RandomForestClassifier())
     }
     for name, model in models.items():
-        logging.info(f"در حال آموزش و ارزیابی مدل: {name}")
+        logging.debug(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
         results[name] = metrics
         logging.info(f"نتایج مدل {name}: {metrics}")
-    results["myModel"] = {
-        "Balanced Accuracy": myRes["Balanced Accuracy"],
-        "AUC": myRes["AUC"],
-        "F1 Score": myRes["F1 Score"],
-        "FM": myRes["FM"],
-        "GM": myRes["GM"],
-        "Decision Cost": myRes["Decision Cost"],
-        "TP": myRes["TP"],
-        "TN": myRes["TN"],
-        "FP": myRes["FP"],
-        "FN": myRes["FN"]
-    }
+
+    results["myModel"] = myModelEvaluation
+
     logging.error("نتایج کلی:")
     for name, metric in results.items():
         logging.info(f"{name}: {metric}")
