@@ -524,7 +524,7 @@ if __name__ == "__main__":
         logging.debug(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
         results[name] = metrics
-        logging.debug(f"نتایج مدل {name}: {metrics}")
+        logging.warning(f"نتایج مدل {name}: {metrics}")
 
     results["myModel"] = myModelEvaluation
 
