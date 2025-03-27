@@ -6,6 +6,7 @@ from math import sqrt
 
 import numpy as np
 import pandas as pd
+from colorlog import ColoredFormatter
 from imblearn.over_sampling import SMOTE
 from lightgbm import LGBMClassifier
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -17,7 +18,7 @@ from sklearn.ensemble import (AdaBoostClassifier, ExtraTreesClassifier, Gradient
 from sklearn.feature_selection import RFECV
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (classification_report, f1_score, confusion_matrix,
+from sklearn.metrics import (f1_score, confusion_matrix,
                              balanced_accuracy_score, roc_auc_score, precision_score, recall_score)
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
@@ -29,18 +30,15 @@ from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date,
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xgboost import XGBClassifier
 
-from colorlog import ColoredFormatter
-import logging
-
 formatter = ColoredFormatter(
     "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
     datefmt=None,
     reset=True,
     log_colors={
-        'DEBUG':    'cyan',
-        'INFO':     'white',
-        'WARNING':  'yellow',
-        'ERROR':    'red',
+        'DEBUG': 'cyan',
+        'INFO': 'white',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
         'CRITICAL': 'bold_red',
     }
 )
@@ -51,7 +49,6 @@ handler.setFormatter(formatter)
 logger = logging.getLogger()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
-
 
 Base = declarative_base()
 protected_columns = ['approval_amount', 'interest_amount']
@@ -291,7 +288,7 @@ class ThresholdOptimizationProblem(Problem):
                                 np.where(self.predicted_probs <= lower_threshold,
                                          self.false_neg_cost * self.predicted_probs,
                                          adjusted_fn_cost * self.predicted_probs + adjusted_fp_cost * (
-                                                     1 - self.predicted_probs)))
+                                                 1 - self.predicted_probs)))
         return sample_costs
 
     def _evaluate(self, solution, out, *args, **kwargs):
@@ -504,7 +501,7 @@ if __name__ == "__main__":
     models = {
         "Bayes": GaussianNB(),
         "KNN": KNeighborsClassifier(),
-        "LR": LogisticRegression(max_iter=3000),
+        "LR": LogisticRegression(max_iter=10_000),
         "NN": MLPClassifier(max_iter=300),
         "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),
         "ERT": ExtraTreesClassifier(),
@@ -527,7 +524,7 @@ if __name__ == "__main__":
         logging.debug(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
         results[name] = metrics
-        logging.info(f"نتایج مدل {name}: {metrics}")
+        logging.debug(f"نتایج مدل {name}: {metrics}")
 
     results["myModel"] = myModelEvaluation
 
