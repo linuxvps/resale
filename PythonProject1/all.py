@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 from decimal import Decimal
@@ -11,14 +12,13 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier, \
-    RandomForestClassifier, StackingClassifier
-from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import (AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier,
+                              RandomForestClassifier, StackingClassifier, BaggingClassifier)
 from sklearn.feature_selection import RFECV
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, f1_score
-from sklearn.metrics import confusion_matrix, balanced_accuracy_score, roc_auc_score, precision_score, recall_score
+from sklearn.metrics import (classification_report, f1_score, confusion_matrix,
+                             balanced_accuracy_score, roc_auc_score, precision_score, recall_score)
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
@@ -26,74 +26,89 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, \
     SmallInteger
-from sqlalchemy.orm import declarative_base, Session, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from xgboost import XGBClassifier
 
-Base = declarative_base()
+# تنظیم logging به جای استفاده از print
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+Base = declarative_base()
+# لیست ستون‌های محافظت‌شده
 protected_columns = ['approval_amount', 'interest_amount']
 results = {}
-# ==================== تعریف مدل ParsianLoan ====================
+
+# تابع کمکی برای تبدیل نتایج SQLAlchemy به DataFrame به صورت استاندارد
+def sqlalchemy_results_to_df(loans, model):
+    if not loans:
+        logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
+        return pd.DataFrame()
+    columns = [col.name for col in model.__table__.columns]
+    data = {col: [getattr(loan, col) for loan in loans] for col in columns}
+    df = pd.DataFrame(data)
+    logging.info(f"✅ {len(df)} رکورد از دیتابیس دریافت شد.")
+    return df
+
+# مدل ParsianLoan مطابق مقاله
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
 
-    id = Column("id", BigInteger, primary_key=True, autoincrement=True)
-    insert_sysdate = Column("insert_sysdate", DateTime, nullable=False, default=datetime.utcnow)
-    branch_code = Column("branch_code", Integer, nullable=False)
-    branchname = Column("branchname", String(100), nullable=True)
-    client_id = Column("client_id", Integer, nullable=True)
-    loan_file_numberr = Column("loan_file_numberr", BigInteger, nullable=True)
-    sit_flag = Column("sit_flag", String(1), nullable=True)
-    interest_rate = Column("interest_rate", Numeric(19, 2), nullable=True)
-    total_repayment_up_to_now = Column("total_repayment_up_to_now", Numeric(28, 8), nullable=True)
-    commission_amount_remain = Column("commission_amount_remain", Numeric(28, 8), nullable=True)
-    charge = Column("charge", Numeric(28, 8), nullable=True)
-    discount = Column("discount", Numeric(28, 8), nullable=True)
-    advance_pay_to_total_cash = Column("advance_pay_to_total_cash", Numeric(28, 8), nullable=True)
-    advance_pay_to_remain_non_cash = Column("advance_pay_to_remain_non_cash", Numeric(28, 8), nullable=True)
-    is_installment = Column("is_installment", String(1), nullable=True)
-    interest_sum = Column("interest_sum", Numeric(28, 8), nullable=True)
-    installment_number_remain = Column("installment_number_remain", Integer, nullable=True)
-    receivable_installment_number = Column("receivable_installment_number", Integer, nullable=True)
-    first_passed = Column("first_passed", Date, nullable=True)
-    total_payment_up_to_now = Column("total_payment_up_to_now", Numeric(28, 8), nullable=True)
-    finalized_loan_amount = Column("finalized_loan_amount", Numeric(28, 8), nullable=True)
-    penalty = Column("penalty", Numeric(28, 8), nullable=True)
-    first_payment_date_in_du = Column("first_payment_date_in_du", Date, nullable=True)
-    principal_sum = Column("principal_sum", Numeric(28, 8), nullable=True)
-    advance_pay = Column("advance_pay", Numeric(28, 8), nullable=True)
-    sit_duration = Column("sit_duration", Integer, nullable=True)
-    sit_duration_day = Column("sit_duration_day", Integer, nullable=True)
-    sit_distribute_phases = Column("sit_distribute_phases", Integer, nullable=True)
-    sit_fast_receive_percent = Column("sit_fast_receive_percent", Float, nullable=True)
-    frequency = Column("frequency", Integer, nullable=True)
-    customer_obligation_amount = Column("customer_obligation_amount", Numeric(28, 8), nullable=True)
-    customer_share_cash_amount = Column("customer_share_cash_amount", Numeric(28, 8), nullable=True)
-    customer_share_non_cash_amount = Column("customer_share_non_cash_amount", Numeric(28, 8), nullable=True)
-    bank_share_cash_amount = Column("bank_share_cash_amount", Numeric(28, 8), nullable=True)
-    bank_share_non_cash_amount = Column("bank_share_non_cash_amount", Numeric(28, 8), nullable=True)
-    first_over_due = Column("first_over_due", Date, nullable=True)
-    loan_duration_day = Column("loan_duration_day", Integer, nullable=True)
-    loan_file_number = Column("loan_file_number", BigInteger, nullable=True)
-    create_date = Column("create_date", Date, nullable=True)
-    long_title = Column("long_title", String(255), nullable=True)
-    status = Column("status", String(255), nullable=True)
-    contract = Column("contract", String(255), nullable=True)
-    approval_amount = Column("approval_amount", Numeric(28, 8), nullable=True)
-    title = Column("title", String(255), nullable=True)
-    inc_commission_amount = Column("inc_commission_amount", Numeric(28, 8), nullable=True)
-    interest_amount = Column("interest_amount", Numeric(28, 8), nullable=True)
-    obligation_penalty = Column("obligation_penalty", Numeric(28, 8), nullable=True)
-    passed_date = Column("passed_date", Date, nullable=True)
-    penalty_interest = Column("penalty_interest", Numeric(28, 8), nullable=True)
-    to_due_date = Column("to_due_date", Numeric(28, 8), nullable=True)
-    to_end_of_month = Column("to_end_of_month", Numeric(28, 8), nullable=True)
-    due_date = Column("due_date", Date, nullable=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    insert_sysdate = Column(DateTime, nullable=False, default=datetime.utcnow)
+    branch_code = Column(Integer, nullable=False)
+    branchname = Column(String(100), nullable=True)
+    client_id = Column(Integer, nullable=True)
+    loan_file_numberr = Column(BigInteger, nullable=True)
+    sit_flag = Column(String(1), nullable=True)
+    interest_rate = Column(Numeric(19, 2), nullable=True)
+    total_repayment_up_to_now = Column(Numeric(28, 8), nullable=True)
+    commission_amount_remain = Column(Numeric(28, 8), nullable=True)
+    charge = Column(Numeric(28, 8), nullable=True)
+    discount = Column(Numeric(28, 8), nullable=True)
+    advance_pay_to_total_cash = Column(Numeric(28, 8), nullable=True)
+    advance_pay_to_remain_non_cash = Column(Numeric(28, 8), nullable=True)
+    is_installment = Column(String(1), nullable=True)
+    interest_sum = Column(Numeric(28, 8), nullable=True)
+    installment_number_remain = Column(Integer, nullable=True)
+    receivable_installment_number = Column(Integer, nullable=True)
+    first_passed = Column(Date, nullable=True)
+    total_payment_up_to_now = Column(Numeric(28, 8), nullable=True)
+    finalized_loan_amount = Column(Numeric(28, 8), nullable=True)
+    penalty = Column(Numeric(28, 8), nullable=True)
+    first_payment_date_in_du = Column(Date, nullable=True)
+    principal_sum = Column(Numeric(28, 8), nullable=True)
+    advance_pay = Column(Numeric(28, 8), nullable=True)
+    sit_duration = Column(Integer, nullable=True)
+    sit_duration_day = Column(Integer, nullable=True)
+    sit_distribute_phases = Column(Integer, nullable=True)
+    sit_fast_receive_percent = Column(Float, nullable=True)
+    frequency = Column(Integer, nullable=True)
+    customer_obligation_amount = Column(Numeric(28, 8), nullable=True)
+    customer_share_cash_amount = Column(Numeric(28, 8), nullable=True)
+    customer_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
+    bank_share_cash_amount = Column(Numeric(28, 8), nullable=True)
+    bank_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
+    first_over_due = Column(Date, nullable=True)
+    loan_duration_day = Column(Integer, nullable=True)
+    loan_file_number = Column(BigInteger, nullable=True)
+    create_date = Column(Date, nullable=True)
+    long_title = Column(String(255), nullable=True)
+    status = Column(String(255), nullable=True)
+    contract = Column(String(255), nullable=True)
+    approval_amount = Column(Numeric(28, 8), nullable=True)
+    title = Column(String(255), nullable=True)
+    inc_commission_amount = Column(Numeric(28, 8), nullable=True)
+    interest_amount = Column(Numeric(28, 8), nullable=True)
+    obligation_penalty = Column(Numeric(28, 8), nullable=True)
+    passed_date = Column(Date, nullable=True)
+    penalty_interest = Column(Numeric(28, 8), nullable=True)
+    to_due_date = Column(Numeric(28, 8), nullable=True)
+    to_end_of_month = Column(Numeric(28, 8), nullable=True)
+    due_date = Column(Date, nullable=True)
 
     def __repr__(self):
         return f"<ParsianLoan(id={self.id}, branch_code={self.branch_code}, client_id={self.client_id})>"
 
-# ==================== تعریف مدل LoanFeatures ====================
+# مدل LoanFeatures طبق مقاله
 class LoanFeatures(Base):
     __tablename__ = "loan_features"
 
@@ -112,19 +127,16 @@ class LoanRepository:
         self.session = self.create_database_session()
 
     @staticmethod
-    def create_database_session() -> Session:
-        engine = create_engine("mysql+pymysql://root:pass@localhost:3306/ln")
+    def create_database_session():
+        # استفاده از متغیر محیطی برای رشته اتصال؛ در صورت عدم وجود، مقدار پیش‌فرض استفاده می‌شود
+        db_conn = os.getenv("DB_CONNECTION_STRING", "mysql+pymysql://root:pass@localhost:3306/ln")
+        engine = create_engine(db_conn)
         SessionLocal = sessionmaker(bind=engine)
         return SessionLocal()
 
     def fetch_loans(self, limit: int = 10000) -> pd.DataFrame:
         loans = self.session.query(ParsianLoan).limit(limit).all()
-        if not loans:
-            print("⚠️ هیچ داده‌ای از پایگاه داده دریافت نشد.")
-            return pd.DataFrame()
-        df = pd.DataFrame([loan.__dict__ for loan in loans])
-        df.drop(columns=["_sa_instance_state"], inplace=True, errors="ignore")
-        print(f"✅ {len(df)} رکورد از دیتابیس دریافت شد.")
+        df = sqlalchemy_results_to_df(loans, ParsianLoan)
         return df
 
 # ==================== تعریف کلاس LoanPreprocessor ====================
@@ -135,8 +147,10 @@ class LoanPreprocessor:
     def convert_dataframe_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         for col in df.columns:
             if np.issubdtype(df[col].dtype, np.datetime64):
-                df[col] = (pd.to_datetime(df[col]) - pd.Timestamp("2000-01-01")).dt.days
+                # تبدیل تاریخ به timestamp به عنوان عدد شناور (ثانیه از epoch)
+                df[col] = pd.to_datetime(df[col]).apply(lambda x: x.timestamp() if pd.notnull(x) else np.nan)
             elif df[col].dtype == 'object':
+                # تلاش برای تبدیل به عدد، در صورت عدم موفقیت از LabelEncoder استفاده می‌شود
                 try:
                     df[col] = pd.to_numeric(df[col])
                 except Exception:
@@ -151,13 +165,13 @@ class LoanPreprocessor:
     def convert_labels(self, df: pd.DataFrame, label_column: str = "status") -> pd.DataFrame:
         if label_column not in df.columns:
             raise ValueError(f"⚠️ ستون '{label_column}' در داده وجود ندارد. لطفاً نام صحیح ستون برچسب را مشخص کنید.")
-        print(f"🟢 ستون برچسب انتخاب شده: {label_column}")
-        print("🔹 مقدارهای `status` قبل از تبدیل:")
-        print(df[label_column].value_counts())
+        logging.info(f"🟢 ستون برچسب انتخاب شده: {label_column}")
+        logging.info("🔹 مقدارهای `status` قبل از تبدیل:")
+        logging.info(df[label_column].value_counts().to_string())
         default_statuses = {'مشكوك الوصول', 'معوق', 'سررسيد گذشته'}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
-        print("🔹 تعداد برچسب‌های نکول و غیرنکول پس از تبدیل:")
-        print(df[label_column].value_counts())
+        logging.info("🔹 تعداد برچسب‌های نکول و غیرنکول پس از تبدیل:")
+        logging.info(df[label_column].value_counts().to_string())
         return df
 
     def remove_highly_correlated_features(self, data, threshold, class_column=None):
@@ -172,53 +186,48 @@ class LoanPreprocessor:
             col_i = numeric_cols[i]
             for j in range(i + 1, len(numeric_cols)):
                 col_j = numeric_cols[j]
-                corr_value = corr_matrix.iloc[i, j]
+                corr_value = corr_matrix.loc[col_i, col_j]
                 if abs(corr_value) > threshold:
-                    print(f"🔴 همبستگی بالا بین: {col_i} و {col_j} | مقدار: {corr_value:.4f} | حذف: {col_j}")
+                    logging.info(f"🔴 همبستگی بالا بین: {col_i} و {col_j} | مقدار: {corr_value:.4f} | حذف: {col_j}")
                     attributes_to_remove.add(col_j)
         for col in attributes_to_remove:
             if class_column and col == class_column:
                 continue
             if protected_columns and col in protected_columns:
                 continue
-            print(f"✅ ویژگی حذف شد: {col}")
+            logging.info(f"✅ ویژگی حذف شد: {col}")
             new_data.drop(columns=[col], inplace=True)
-        print("ماتریس همبستگی:")
-        print(corr_matrix.to_string())
+        logging.info("ماتریس همبستگی:")
+        logging.info(corr_matrix.to_string())
         return new_data
 
     def select_features(self, X, y):
-
         lgbm_estimator = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
         rfecv = RFECV(estimator=lgbm_estimator, step=1, cv=5, scoring='accuracy', n_jobs=-1, verbose=0)
         rfecv.fit(X, y)
-
         selected_features = list(X.columns[rfecv.support_])
+        # افزودن ویژگی‌های محافظت‌شده در صورت عدم وجود در لیست انتخاب‌شده
         for col in protected_columns:
-            if col not in selected_features and col in X.columns:
+            if col in X.columns and col not in selected_features:
                 selected_features.append(col)
-
-        # محاسبه ویژگی‌های انتخاب نشده
         not_selected_features = [col for col in X.columns if col not in selected_features]
-
-        print("ویژگی‌های انتخاب شده:", selected_features)
-        print("ویژگی‌های انتخاب نشده:", not_selected_features)
-
+        logging.info("ویژگی‌های انتخاب شده: " + ", ".join(selected_features))
+        logging.info("ویژگی‌های انتخاب نشده: " + ", ".join(not_selected_features))
         return X.loc[:, selected_features]
 
 
     def preprocess(self, df: pd.DataFrame, label_column: str = "status") -> (pd.DataFrame, pd.Series):
         df = self.convert_labels(df, label_column)
         df = self.convert_dataframe_columns(df)
+        # حذف ستون‌هایی که ممکن است اطلاعات اضافی داشته باشند
         df.drop(columns=["create_date"], errors="ignore", inplace=True)
         df = self.remove_highly_correlated_features(df, threshold=0.9, class_column=label_column)
         df_imputed = pd.DataFrame(self.imputer.fit_transform(df), columns=df.columns)
-        # جداسازی ویژگی‌ها و برچسب‌ها
         X = df_imputed.drop(columns=[label_column])
         y = df_imputed[label_column]
         return X, y
 
-# ==================== تعریف کلاس LoanDataHandler ====================
+# کلاس مدیریت داده‌ها
 class LoanDataHandler:
     def __init__(self, repository: LoanRepository, preprocessor: LoanPreprocessor):
         self.repository = repository
@@ -227,17 +236,13 @@ class LoanDataHandler:
     def load_and_process_data(self, limit_records: int = 10000) -> (pd.DataFrame, pd.Series, pd.DataFrame, pd.Series):
         df = self.repository.fetch_loans(limit_records)
         X, y = self.preprocessor.preprocess(df)
-        # تقسیم داده‌ها به آموزش و تست
         x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        # انتخاب ویژگی‌ها با استفاده از RFECV روی مجموعه آموزشی
         x_train_selected = self.preprocessor.select_features(x_train, y_train)
-        # اعمال همان انتخاب ویژگی روی مجموعه تست
         x_test_selected = x_test[x_train_selected.columns]
         return x_train_selected, y_train, x_test_selected, y_test
 
-# ==================== تعریف کلاس ThresholdOptimizationProblem و تابع optimize_threshold_scales ====================
+# تعریف مسئله بهینه‌سازی آستانه‌ها
 class ThresholdOptimizationProblem(Problem):
-
     def __init__(self, predicted_probs, false_pos_cost, false_neg_cost):
         self.predicted_probs = predicted_probs
         self.false_pos_cost = false_pos_cost
@@ -296,21 +301,16 @@ def optimize_threshold_scales(predicted_probs, false_pos_cost, false_neg_cost, p
     best_scale_fn, best_scale_fp = optimization_result.X[best_index]
     return best_scale_fn, best_scale_fp
 
-# ==================== توابع مربوط به مدل و ارزیابی ====================
-def pre_process_data_from_db():
-    loan_repository = LoanRepository()
-    loan_preprocessor = LoanPreprocessor(imputation_strategy="median")
-    loan_data_handler = LoanDataHandler(loan_repository, loan_preprocessor)
-    return loan_data_handler.load_and_process_data(limit_records=100_000)
-
+# تابع برای آموزش مدل LightGBM
 def train_lightgbm_model(x_train, y_train, x_test):
     lightgbm_classifier = LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
-    print("شروع آموزش مدل LightGBM...")
+    logging.info("شروع آموزش مدل LightGBM...")
     lightgbm_classifier.fit(x_train, y_train)
-    print("آموزش مدل به پایان رسید.")
+    logging.info("آموزش مدل به پایان رسید.")
     predicted_probabilities = lightgbm_classifier.predict_proba(x_test)[:, 1]
     return predicted_probabilities
 
+# تابع محاسبه هزینه‌های مالی بر مبنای جریان نقدی
 def compute_financial_losses(cash_flow_info):
     principal_amount = cash_flow_info['approval_amount'].values
     interest_amount = cash_flow_info['interest_amount'].values
@@ -318,58 +318,65 @@ def compute_financial_losses(cash_flow_info):
     false_negative_loss = principal_amount + interest_amount
     return false_positive_loss, false_negative_loss
 
-def apply_three_way_decision(predicted_probabilities, false_positive_loss, false_negative_loss, upper_threshold_scale, lower_threshold_scale):
-    # u = upper_threshold_scale و v = lower_threshold_scale
-    # محاسبه ضررهای مربوط به تصمیم‌گیری تأخیری:
-    boundary_penalty_positive = upper_threshold_scale * false_negative_loss  # u * (loss of FN)
-    boundary_penalty_negative = lower_threshold_scale * false_positive_loss  # v * (loss of FP)
+def get_classifier(classifier_type='bagging'):
+    if classifier_type.lower() == 'stacking':
+        base_estimators = [
+            ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
+            ('xgb', XGBClassifier(eval_metric='logloss', verbosity=0, random_state=42)),
+            ('gbdt', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+            ('ert', ExtraTreesClassifier(n_estimators=100, random_state=42)),
+            ('ada', AdaBoostClassifier(algorithm="SAMME", n_estimators=100, random_state=42))
+        ]
+        meta_estimator = LogisticRegression(max_iter=1000, random_state=42)
+        classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_estimator, cv=5, n_jobs=-1)
+        return classifier
+    elif classifier_type.lower() == 'bagging':
+        classifier = BaggingClassifier(estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
+                                       n_estimators=10, random_state=42)
+        return classifier
+    else:
+        raise ValueError("نوع طبقه‌بندی‌کننده باید 'bagging' یا 'stacking' باشد.")
 
-    # محاسبه آستانه بالا (α):
+
+# تابع تصمیم‌گیری سه‌راهه با استفاده از آستانه‌های بهینه و مدل استکینگ برای نمونه‌های حوزه تأخیر
+def apply_three_way_decision(predicted_probabilities, false_positive_loss, false_negative_loss, upper_threshold_scale, lower_threshold_scale):
+    boundary_penalty_positive = upper_threshold_scale * false_negative_loss
+    boundary_penalty_negative = lower_threshold_scale * false_positive_loss
+
     numerator_alpha = false_positive_loss - boundary_penalty_negative
     denominator_alpha = numerator_alpha + boundary_penalty_positive
     alpha_threshold = np.where(denominator_alpha == 0, 1.0, numerator_alpha / denominator_alpha)
 
-    # محاسبه آستانه پایین (β):
     numerator_beta = boundary_penalty_negative
     denominator_beta = boundary_penalty_negative + (false_negative_loss - boundary_penalty_positive)
     beta_threshold = np.where(denominator_beta == 0, 0.0, numerator_beta / denominator_beta)
 
-    # اطمینان از اینکه برای هر نمونه آستانه بالا (α) بزرگتر یا مساوی آستانه پایین (β) باشد.
     alpha_threshold = np.maximum(alpha_threshold, beta_threshold)
 
-    # تصمیم‌گیری سه‌راهه:
-    # - اگر احتمال ≥ α، نمونه به POS (1) تعلق می‌گیرد.
-    # - اگر احتمال ≤ β، نمونه به NEG (0) تعلق می‌گیرد.
-    # - در غیر این صورت نمونه به منطقه تأخیر (BND) تعلق می‌گیرد (-1).
     three_way_decision_labels = np.where(predicted_probabilities >= alpha_threshold, 1,
                                          np.where(predicted_probabilities <= beta_threshold, 0, -1))
-
-    # استخراج اندیس‌های نمونه‌های در منطقه تأخیر (BND)
     uncertain_boundary_sample_indices = np.where(three_way_decision_labels == -1)[0]
-
     return three_way_decision_labels, uncertain_boundary_sample_indices
 
+# توابع محاسبه معیارهای ارزیابی مدل
 def calc_fm(precision, recall, b=1):
     if (precision + recall) == 0:
         return 0.0
     return (1 + b**2) * (precision * recall) / (b**2 * precision + recall)
 
-
 def calc_gm(true_labels, predicted_labels):
     cm = confusion_matrix(true_labels, predicted_labels)
     TN, FP, FN, TP = cm[0, 0], cm[0, 1], cm[1, 0], cm[1, 1]
-
     if (TP + FN) == 0 or (TN + FP) == 0:
         return 0.0
     sensitivity = TP / (TP + FN)
     specificity = TN / (TN + FP)
     return sqrt(sensitivity * specificity)
 
-
 def evaluate_model_performance(true_labels, predicted_labels, false_positive_loss, false_negative_loss):
-    print("\n" * 3 + "ارزیابی عملکرد کلی مدل" + "\n" * 3)
+    logging.info("\n\nارزیابی عملکرد کلی مدل\n\n")
     balanced_accuracy = balanced_accuracy_score(true_labels, predicted_labels)
-    area_under_curve = roc_auc_score(true_labels, predicted_labels)
+    auc = roc_auc_score(true_labels, predicted_labels)
     precision = precision_score(true_labels, predicted_labels)
     recall = recall_score(true_labels, predicted_labels)
     f1 = f1_score(true_labels, predicted_labels)
@@ -377,33 +384,22 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
     classification_rep = classification_report(true_labels, predicted_labels)
     decision_cost = np.sum(false_negative_loss[(true_labels == 1) & (predicted_labels == 0)]) + \
                     np.sum(false_positive_loss[(true_labels == 0) & (predicted_labels == 1)])
-
-    print("Balanced Accuracy:", balanced_accuracy)
-    print("AUC:", area_under_curve)
-    print("Precision:", precision)
-    print("Recall:", recall)
-    print("F1 Score:", f1)
-
-    # چاپ ماتریس سردرگمی به فرم مورد نظر
-    print("Confusion Matrix:")
-    print(f"[[TN: {cm[0, 0]}, FP: {cm[0, 1]}],")
-    print(f" [FN: {cm[1, 0]}, TP: {cm[1, 1]}]]")
-
-    print("Classification Report:\n", classification_rep)
-    print("Decision Cost:", decision_cost)
-
-    # محاسبه FM با b=1 (که همان F1-Score است)
+    logging.info(f"Balanced Accuracy: {balanced_accuracy}")
+    logging.info(f"AUC: {auc}")
+    logging.info(f"Precision: {precision}")
+    logging.info(f"Recall: {recall}")
+    logging.info(f"F1 Score: {f1}")
+    logging.info("Confusion Matrix:")
+    logging.info(f"[[TN: {cm[0, 0]}, FP: {cm[0, 1]}], [FN: {cm[1, 0]}, TP: {cm[1, 1]}]]")
+    logging.info("Classification Report:\n" + classification_rep)
+    logging.info(f"Decision Cost: {decision_cost}")
     fm = calc_fm(precision, recall, b=1)
-    # محاسبه GM
     gm = calc_gm(true_labels, predicted_labels)
-
-    print("fm", fm)
-    print("gm", gm)
-
-    # ذخیره تمامی مقادیر در یک متغیر به صورت دیکشنری
-    results = {
+    logging.info(f"fm: {fm}")
+    logging.info(f"gm: {gm}")
+    return {
         "Balanced Accuracy": balanced_accuracy,
-        "AUC": area_under_curve,
+        "AUC": auc,
         "Precision": precision,
         "Recall": recall,
         "F1 Score": f1,
@@ -416,21 +412,13 @@ def evaluate_model_performance(true_labels, predicted_labels, false_positive_los
         "FN": cm[1, 0]
     }
 
-    return results
-
-
-
-
 def apply_smote(X, y, random_state=42):
-
-    print("تعداد نمونه‌های آموزشی قبل از SMOTE:")
-    print(pd.Series(y).value_counts())
-
+    logging.info("تعداد نمونه‌های آموزشی قبل از SMOTE:")
+    logging.info(pd.Series(y).value_counts().to_string())
     sm = SMOTE(random_state=random_state)
     X_resampled, y_resampled = sm.fit_resample(X, y)
-
-    print("تعداد نمونه‌های آموزشی بعد از SMOTE:")
-    print(pd.Series(y_resampled).value_counts())
+    logging.info("تعداد نمونه‌های آموزشی بعد از SMOTE:")
+    logging.info(pd.Series(y_resampled).value_counts().to_string())
     return X_resampled, y_resampled
 
 
@@ -456,7 +444,7 @@ def evaluate_model(y_true, y_pred, y_prob=None, b=1, cost_fp=1, cost_fn=1):
             else:
                 y_score = y_prob
             auc = roc_auc_score(y_true, y_score)
-        except Exception as e:
+        except Exception:
             auc = None
     prec = precision_score(y_true, y_pred, zero_division=0)
     rec = recall_score(y_true, y_pred, zero_division=0)
@@ -478,41 +466,55 @@ def evaluate_model(y_true, y_pred, y_prob=None, b=1, cost_fp=1, cost_fn=1):
     }
     return metrics
 
-# ==================== اجرای کل فرآیند ====================
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"
-    x_train, y_train, x_test, y_test = pre_process_data_from_db()
-    original_data = { "x_train": x_train.copy(), "y_train": y_train.copy(), "x_test": x_test.copy(), "y_test": y_test.copy() }
+    # بارگذاری و پیش‌پردازش داده‌ها
+    loan_repository = LoanRepository()
+    loan_preprocessor = LoanPreprocessor(imputation_strategy="median")
+    loan_data_handler = LoanDataHandler(loan_repository, loan_preprocessor)
+    x_train, y_train, x_test, y_test = loan_data_handler.load_and_process_data(limit_records=100_000)
+    original_data = {"x_train": x_train.copy(), "y_train": y_train.copy(), "x_test": x_test.copy(), "y_test": y_test.copy()}
 
-    # صدا زدن تابع apply_smote برای متعادل‌سازی داده‌های آموزشی و نمایش لاگ
+    # استفاده از SMOTE برای متعادل‌سازی داده‌های آموزشی
     x_train, y_train = apply_smote(x_train, y_train)
     predicted_probabilities_test = train_lightgbm_model(x_train, y_train, x_test)
+    # استخراج اطلاعات جریان نقدی برای محاسبه هزینه‌ها
     cash_flow_data = x_test[protected_columns]
     false_positive_loss_test, false_negative_loss_test = compute_financial_losses(cash_flow_data)
+    # بهینه‌سازی آستانه‌ها با استفاده از NSGA-II
     optimized_upper_threshold_scale, optimized_lower_threshold_scale = optimize_threshold_scales(
         predicted_probabilities_test, false_positive_loss_test, false_negative_loss_test, population_size=100, num_generations=200
     )
-    print("بهترین مقدار برای مقیاس آستانه بالا:", format(Decimal(optimized_upper_threshold_scale), '.20f'))
-    print("بهترین مقدار برای مقیاس آستانه پایین:", format(Decimal(optimized_lower_threshold_scale), '.20f'))
+    logging.info("بهترین مقدار برای مقیاس آستانه بالا: " + format(Decimal(optimized_upper_threshold_scale), '.20f'))
+    logging.info("بهترین مقدار برای مقیاس آستانه پایین: " + format(Decimal(optimized_lower_threshold_scale), '.20f'))
 
+    # اعمال تصمیم‌گیری سه‌راهه
     three_way_decision_labels, uncertain_boundary_sample_indices = apply_three_way_decision(
-        predicted_probabilities_test, false_positive_loss_test, false_negative_loss_test, optimized_upper_threshold_scale, optimized_lower_threshold_scale
+        predicted_probabilities_test,
+        false_positive_loss_test,
+        false_negative_loss_test,
+        optimized_upper_threshold_scale,
+        optimized_lower_threshold_scale
     )
-    ensemble_bagging_classifier = BaggingClassifier(
-        estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
-        n_estimators=10,
-        random_state=42
+    # برای نمونه‌های حوزه تأخیر از مدل استکینگ استفاده می‌شود
+    classifier = get_classifier('bagging')
+    if len(uncertain_boundary_sample_indices) > 0:
+        x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
+        classifier.fit(x_train, y_train)
+        predicted_labels_for_boundary_samples = classifier.predict(x_test_boundary_samples)
+        three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
+
+    myRes = evaluate_model_performance(
+        np.array(y_test),
+        np.array(three_way_decision_labels),
+        false_positive_loss_test,
+        false_negative_loss_test
     )
-    ensemble_bagging_classifier.fit(x_train, y_train)
-    x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
-    predicted_labels_for_boundary_samples = ensemble_bagging_classifier.predict(x_test_boundary_samples)
-    three_way_decision_labels[uncertain_boundary_sample_indices] = predicted_labels_for_boundary_samples
-    myRes = evaluate_model_performance(np.array(y_test), np.array(three_way_decision_labels),
-                                             false_positive_loss_test, false_negative_loss_test)
+
     models = {
         "Bayes": GaussianNB(),
         "KNN": KNeighborsClassifier(),
-        "LR": LogisticRegression(max_iter=1000),
+        "LR": LogisticRegression(max_iter=3000),
         "NN": MLPClassifier(max_iter=300),
         "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),
         "ERT": ExtraTreesClassifier(),
@@ -525,15 +527,22 @@ if __name__ == "__main__":
             ('knn', KNeighborsClassifier())
         ], final_estimator=RandomForestClassifier())
     }
-
     for name, model in models.items():
-        print(f"در حال آموزش و ارزیابی مدل: {name}")
+        logging.info(f"در حال آموزش و ارزیابی مدل: {name}")
         metrics = train_and_evaluate(model, x_train, y_train, x_test, y_test, b=1, cost_fp=1, cost_fn=1)
         results[name] = metrics
-        print(f"نتایج مدل {name}: {metrics}\n")
-
-    results["myModel"] = { "Balanced Accuracy": myRes["Balanced Accuracy"], "AUC": myRes["AUC"], "F-Measure": myRes["FM"], "G-Mean": myRes["GM"], "Cost": myRes["Decision Cost"], "TP": myRes["TP"], "TN": myRes["TN"], "FP": myRes["FP"], "FN": myRes["FN"] }
-
-    print("نتایج کلی:")
+        logging.info(f"نتایج مدل {name}: {metrics}")
+    results["myModel"] = {
+        "Balanced Accuracy": myRes["Balanced Accuracy"],
+        "AUC": myRes["AUC"],
+        "F-Measure": myRes["FM"],
+        "G-Mean": myRes["GM"],
+        "Cost": myRes["Decision Cost"],
+        "TP": myRes["TP"],
+        "TN": myRes["TN"],
+        "FP": myRes["FP"],
+        "FN": myRes["FN"]
+    }
+    logging.error("نتایج کلی:")
     for name, metric in results.items():
-        print(f"{name}: {metric}")
+        logging.info(f"{name}: {metric}")
