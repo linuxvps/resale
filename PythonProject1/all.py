@@ -484,7 +484,7 @@ if __name__ == "__main__":
         optimized_lower_threshold_scale
     )
 
-    classifier = get_classifier('bagging')
+    classifier = get_classifier('stacking')
     if len(uncertain_boundary_sample_indices) > 0:
         x_test_boundary_samples = x_test.iloc[uncertain_boundary_sample_indices]
         classifier.fit(x_train, y_train)

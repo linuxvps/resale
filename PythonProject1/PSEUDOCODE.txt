@@ -1,0 +1,139 @@
+
+PSEUDOCODE: Hybrid Credit Risk Evaluation Model
+------------------------------------------------
+
+BEGIN
+
+  ///////////////////////////////////////////////
+  // بخش ۱: پیش‌پردازش و آماده‌سازی داده‌ها
+  ///////////////////////////////////////////////
+  1. LOAD original_dataset
+     // داده شامل رکوردهایی از وام‌های شخصی با برچسب نکول یا غیر نکول
+     // هر رکورد مجموعه‌ای از ویژگی‌های مالی و اعتباری دارد
+
+  2. CLEAN missing_values IN original_dataset:
+     - REPLACE any missing cell WITH mean OF that feature
+     - ENCODE binary features WITH {0, 1}
+     - ENCODE nominal/categorical features WITH integer codes
+
+  3. FEATURE_SELECTION:
+     - USE a method such as recursive feature elimination (RFE) WITH cross-validation
+     - TRAIN a LightGBM model iteratively TO evaluate feature importance
+     - REMOVE low_importance features
+     - RETAIN the top features (e.g., final 13 features)
+
+  4. BALANCE data USING SMOTE oversampling
+     - SMOTE: CREATE synthetic samples FOR the minority class
+     - RESULTING dataset IS balanced (or closer to balanced)
+
+  5. SPLIT dataset INTO training_set, test_set
+     - e.g., CROSS-VALIDATION folds OR a train-test ratio
+
+  ///////////////////////////////////////////////
+  // بخش ۲: محاسبه احتمال نکول (احتمال پیش‌فرض)
+  ///////////////////////////////////////////////
+  6. TRAIN LightGBM ON training_set
+     - INPUT: selected features
+     - OUTPUT: trained LightGBM model
+
+  7. FOR each sample rᵢ IN test_set:
+     - p_default[rᵢ] = LightGBM.predict_probability(rᵢ)
+       // تخمین احتمال نکول برای هر نمونه
+
+  ///////////////////////////////////////////////
+  // بخش ۳: تعیین آستانه‌های سه‌طرفه مبتنی بر هزینه‌ها و بهینه‌سازی چندهدفه
+  ///////////////////////////////////////////////
+
+  // 3-1: تعریف زیان‌های تصمیم‌گیری با داده‌های جریان نقدی
+  8. FOR each sample rᵢ:
+       DETERMINE loss values:
+         - λ_PP[rᵢ], λ_PN[rᵢ], λ_NN[rᵢ], λ_NP[rᵢ], λ_BP[rᵢ], λ_BN[rᵢ]
+         // با توجه به اطلاعات نقدینگی و میزان ریسک هر نمونه
+         // λ_PP, λ_NN: زیان تصمیم درست
+         // λ_PN, λ_NP: زیان تصمیم اشتباه
+         // λ_BP, λ_BN: زیان تصمیم مرزی (در صورت تصمیم تأخیری)
+
+  // 3-2: تعریف پارامترهای u و v که بر آستانه‌های سه‌طرفه اثر می‌گذارند
+  9. DEFINE u, v ∈ [0,1] SUBJECT TO (u + v ≤ 1)
+
+  // 3-3: محاسبه تابع هدف
+  // هدف اول: مینیمم کردن هزینه تصمیم‌گیری کل
+  // هدف دوم: مینیمم کردن اندازه ناحیه مرزی (مجموع (αᵢ - βᵢ))
+  10. DEFINE objective f1(u,v) = Total_decision_cost(u,v)
+      DEFINE objective f2(u,v) = Σᵢ (αᵢ - βᵢ)
+         // αᵢ, βᵢ بر اساس فرمول‌های مقاله و متغیرهای u و v تعیین می‌شوند
+
+  11. USE a multiobjective genetic algorithm (e.g., NSGA-II):
+      - population_size = 100
+      - max_generations = 200
+      - CROSSOVER, MUTATION, SELECTION to evolve population
+      - EVALUATE each (u, v) BY:
+         1) CALCULATE αᵢ, βᵢ FOR each sample rᵢ
+         2) CLASSIFY rᵢ ∈ POS, NEG, or BND
+         3) CALCULATE f1, f2
+
+  12. AFTER convergence, SELECT a non-dominated solution
+      - OR SELECT the solution WITH minimal boundary region
+      - EXTRACT u*, v* FROM solution
+      - THEN RECALCULATE αᵢ, βᵢ FOR each sample
+
+  ///////////////////////////////////////////////
+  // بخش ۴: تقسیم نمونه‌ها بر اساس آستانه‌های سه‌طرفه
+  ///////////////////////////////////////////////
+  13. FOR each sample rᵢ:
+       IF p_default[rᵢ] >= αᵢ THEN
+          LABEL rᵢ AS POS
+       ELSE IF p_default[rᵢ] <= βᵢ THEN
+          LABEL rᵢ AS NEG
+       ELSE
+          LABEL rᵢ AS BND
+       ENDIF
+
+  ///////////////////////////////////////////////
+  // بخش ۵: مدل استکینگ برای نمونه‌های BND
+  ///////////////////////////////////////////////
+  14. EXTRACT BND_samples = {rᵢ | labeled BND}
+
+  15. TRAIN multiple base classifiers ON training_set (or all non-BND data):
+       - base_classifiers = {RF, XGBoost, GBDT, ERT, AdaBoost, LGBM}
+       - FOR each classifier c:
+           c.fit(training_set_features, training_set_labels)
+
+  16. BUILD meta_features FOR BND_samples:
+       - FOR each rᵢ ∈ BND_samples:
+           meta_input[rᵢ] = []
+           FOR each base_classifier c:
+               meta_input[rᵢ].append(c.predict_proba(rᵢ))
+             // احتمال نکول خروجی هر کدام از مدل‌ها
+
+  17. TRAIN meta_classifier (e.g. Logistic Regression) ON (meta_input, true_labels_of_BND)
+      // در مقاله از LR به عنوان مدل متا استفاده می‌شود
+
+  18. FOR each rᵢ ∈ BND_samples:
+       final_decision[rᵢ] = meta_classifier.predict(meta_input[rᵢ])
+       IF final_decision[rᵢ] == "default" THEN
+          LABEL rᵢ AS default
+       ELSE
+          LABEL rᵢ AS nondefault
+       ENDIF
+
+  ///////////////////////////////////////////////
+  // بخش ۶: ارزیابی و محاسبه شاخص‌های عملکرد
+  ///////////////////////////////////////////////
+  19. CALCULATE confusion matrix elements: TP, TN, FP, FN
+      - مقایسه برچسب نهایی هر نمونه با برچسب واقعی
+
+  20. CALCULATE Balanced Accuracy, AUC, F-measure, G-mean:
+      - Balanced Accuracy = (TP/(TP+FP) + TN/(TN+FN)) / 2
+      - AUC: AREA under ROC curve
+      - F-measure: combination of precision & recall
+      - G-mean: sqrt((TP/(TP+FN)) * (TN/(TN+FP)))
+
+  21. CALCULATE total decision Cost:
+      - Cost = Σ(λ_NP * error_for_default + λ_PN * error_for_nondefault)
+        FOR all samples
+
+  22. OUTPUT (BalancedAccuracy, AUC, Fmeasure, Gmean, Cost)
+      COMPARE with baseline single learners & plain ensemble methods
+
+END
