@@ -319,16 +319,34 @@ def compute_financial_losses(cash_flow_info):
     return false_positive_loss, false_negative_loss
 
 def apply_three_way_decision(predicted_probabilities, false_positive_loss, false_negative_loss, upper_threshold_scale, lower_threshold_scale):
-    boundary_penalty_positive = upper_threshold_scale * false_negative_loss
-    boundary_penalty_negative = lower_threshold_scale * false_positive_loss
+    # u = upper_threshold_scale و v = lower_threshold_scale
+    # محاسبه ضررهای مربوط به تصمیم‌گیری تأخیری:
+    boundary_penalty_positive = upper_threshold_scale * false_negative_loss  # u * (loss of FN)
+    boundary_penalty_negative = lower_threshold_scale * false_positive_loss  # v * (loss of FP)
+
+    # محاسبه آستانه بالا (α):
     numerator_alpha = false_positive_loss - boundary_penalty_negative
     denominator_alpha = numerator_alpha + boundary_penalty_positive
     alpha_threshold = np.where(denominator_alpha == 0, 1.0, numerator_alpha / denominator_alpha)
+
+    # محاسبه آستانه پایین (β):
     numerator_beta = boundary_penalty_negative
     denominator_beta = boundary_penalty_negative + (false_negative_loss - boundary_penalty_positive)
     beta_threshold = np.where(denominator_beta == 0, 0.0, numerator_beta / denominator_beta)
-    three_way_decision_labels = np.where(predicted_probabilities >= alpha_threshold, 1, np.where(predicted_probabilities <= beta_threshold, 0, -1))
+
+    # اطمینان از اینکه برای هر نمونه آستانه بالا (α) بزرگتر یا مساوی آستانه پایین (β) باشد.
+    alpha_threshold = np.maximum(alpha_threshold, beta_threshold)
+
+    # تصمیم‌گیری سه‌راهه:
+    # - اگر احتمال ≥ α، نمونه به POS (1) تعلق می‌گیرد.
+    # - اگر احتمال ≤ β، نمونه به NEG (0) تعلق می‌گیرد.
+    # - در غیر این صورت نمونه به منطقه تأخیر (BND) تعلق می‌گیرد (-1).
+    three_way_decision_labels = np.where(predicted_probabilities >= alpha_threshold, 1,
+                                         np.where(predicted_probabilities <= beta_threshold, 0, -1))
+
+    # استخراج اندیس‌های نمونه‌های در منطقه تأخیر (BND)
     uncertain_boundary_sample_indices = np.where(three_way_decision_labels == -1)[0]
+
     return three_way_decision_labels, uncertain_boundary_sample_indices
 
 def calc_fm(precision, recall, b=1):
@@ -474,8 +492,9 @@ if __name__ == "__main__":
     optimized_upper_threshold_scale, optimized_lower_threshold_scale = optimize_threshold_scales(
         predicted_probabilities_test, false_positive_loss_test, false_negative_loss_test, population_size=100, num_generations=200
     )
-    print("بهترین مقدار برای مقیاس آستانه بالا:", Decimal(optimized_upper_threshold_scale))
-    print("بهترین مقدار برای مقیاس آستانه پایین:", Decimal(optimized_lower_threshold_scale))
+    print("بهترین مقدار برای مقیاس آستانه بالا:", format(Decimal(optimized_upper_threshold_scale), '.20f'))
+    print("بهترین مقدار برای مقیاس آستانه پایین:", format(Decimal(optimized_lower_threshold_scale), '.20f'))
+
     three_way_decision_labels, uncertain_boundary_sample_indices = apply_three_way_decision(
         predicted_probabilities_test, false_positive_loss_test, false_negative_loss_test, optimized_upper_threshold_scale, optimized_lower_threshold_scale
     )
