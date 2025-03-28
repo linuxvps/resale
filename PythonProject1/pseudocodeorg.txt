@@ -1,0 +1,277 @@
+BEGIN
+
+/////////////////////////////////////////////////////////////////////////////
+// 0. مقدمه: تعریف ورودی‌ها، خروجی‌ها، جداول گزارش‌گیری و نمودارهای مورد نیاز
+/////////////////////////////////////////////////////////////////////////////
+
+/*
+  هدف: این بخش توضیح می‌دهد که برنامه‌نویس چه انتظاراتی از ورودی و خروجی دارد.
+  - ورودی (Input):
+    1) داده‌های وام یک موسسه مالی شامل رکوردهای مشتریان:
+       - ویژگی‌های مختلف (عدد یا دسته‌ای)
+       - برچسب نکول (1= نکول کرده، 0= غیرنکول) اگر موجود باشد
+       - اطلاعات جریان نقدی (مبلغ اصل، سود بالقوه و ...)
+    2) پارامترهای انتخابی برای مدل (مثلاً نوع الگوریتم تقویت گرادیان، نحوه Oversampling،
+       تعداد تکرارهای Cross-Validation و غیره)
+
+  - خروجی (Output):
+    1) برچسب نهایی هر مشتری:
+       - پذیرش به عنوان نکول (POS)
+       - رد به عنوان نکول (NEG)
+       - قرارگیری در ناحیه مرزی (BND) + تصمیم‌گیری نهایی با استکینگ
+    2) گزارش آماری و جداولی شامل:
+       - تعداد نمونه در هر ناحیه (POS, BND, NEG)
+       - ماتریس سردرگمی نهایی (TP, TN, FP, FN)
+       - مقادیر هزینه تصمیم‌گیری، AUC، دقت متعادل (B_Acc)، F1 و ...
+    3) نمودارها (Charts) برای گزارش‌گیری (مثلاً نمودار پخش نمونه‌ها در سه ناحیه بر اساس آستانه‌ها)
+*/
+
+/* تعریف ساختارهایی که توصیه می‌شود برای گزارش‌گیری استفاده شود:
+   1) جدول (Report_Table_Main):
+      - RecordID: شناسه یکتا
+      - Features: بردار ویژگی‌های مشتری
+      - TrueLabel (اختیاری): برچسب واقعی (درصورت وجود)
+      - p_default: احتمال نکول تخمین‌زده شده
+      - alpha, beta: آستانه‌های اختصاصی برای هر نمونه
+      - RegionLabel: برچسب POS/NEG/BND
+      - FinalDecision: برچسب نهایی بعد از مرحله استکینگ
+      - DecisionCost: هزینه تصمیمی که برای این رکورد اعمال شده
+
+   2) جدول (Report_Table_CostMatrix):
+      - RecordID
+      - λ_PP, λ_PN, λ_BP, λ_BN, λ_NP, λ_NN
+      - این مقادیر برای محاسبه هزینه در تصمیم‌های مختلف استفاده می‌شود
+
+   3) نمودارها (Charts):
+      - Distribution of p_default vs alpha, beta
+      - Cost comparison chart
+      - نمودار یا جدول نهایی از ارزیابی مدل (مثلاً ROC Curve, PR Curve)
+
+   نکته: این موارد برای گزارش‌گیری توصیه می‌شود و می‌توان بسته به نیاز تغییر داد.
+*/
+
+/////////////////////////////////////////////////////////////////////////////
+// 1. آماده‌سازی داده‌ها (Preprocessing)
+/////////////////////////////////////////////////////////////////////////////
+
+1. LOAD RawLoanData   // داده‌های وام موسسه مالی
+   /* شامل:
+      - ID یا شناسه مشتری
+      - مجموعه‌ای از ویژگی‌های عددی یا رسته‌ای
+      - در صورت موجود بودن: برچسب نکول (1) یا غیرنکول (0)
+      - اطلاعات مالی: Principal (A), Interest (I), یا هر داده دیگر مناسب
+   */
+
+2. CLEAN RawLoanData:
+   - FOR each feature:
+       - HANDLE missing values (e.g., replace with mean)
+       - IF feature is binary THEN encode as {0,1}
+       - IF feature is categorical THEN encode as integer codes or one-hot
+     // هدف: تبدیل همه ویژگی‌ها به شکل قابل استفاده در مدل‌های یادگیری ماشین
+
+3. OPTIONAL FEATURE_SELECTION:
+   - روش‌های ممکن:
+     A) Recursive Feature Elimination (RFE) + Cross-Validation
+     B) Feature Importance از مدل درختی (مثلاً LightGBM)
+   - SELECT only top features
+   - REMOVE low-importance features
+
+4. BALANCE Data IF needed (e.g., SMOTE):
+   - اگر داده‌ها نامتوازن است، روش SMOTE یا روش‌های دیگر Oversampling/Undersampling اعمال شود.
+
+5. SPLIT dataset INTO TrainingSet & TestSet
+   - یا k-fold cross-validation
+   - STORE آن در ساختار مناسب
+
+
+/////////////////////////////////////////////////////////////////////////////
+// 2. مدل اولیه برای برآورد احتمال نکول
+/////////////////////////////////////////////////////////////////////////////
+
+6. TRAIN a probabilistic classifier (e.g. LightGBM, XGBoost, etc.) ON TrainingSet
+   - model_base = trainClassifier(TrainingSetFeatures, TrainingSetLabels)
+
+7. FOR each record rᵢ in TestSet:
+   - p_default[rᵢ] = model_base.predict_probability(rᵢ.features)
+   - SAVE p_default[rᵢ] IN Report_Table_Main
+
+
+/////////////////////////////////////////////////////////////////////////////
+// 3. محاسبه ماتریس زیان (CostMatrix) بر مبنای داده‌های جریان نقدی
+/////////////////////////////////////////////////////////////////////////////
+
+8. FOR each record rᵢ in TestSet:
+   - Extract Aᵢ = principal, Iᵢ = interest (or any other relevant cost info)
+   - λ_PP = 0           // پذیرش درست نمونه‌ای که واقعاً نکول است
+   - λ_NN = 0           // رد درست نمونه‌ای که واقعاً غیرنکول است
+   - λ_PN = Iᵢ          // پذیرش اشتباه یک نمونه غیرنکول (از دست دادن سود بالقوه)
+   - λ_NP = Aᵢ + Iᵢ     // رد اشتباه یک نمونه نکول (از دست دادن اصل و سود)
+   - λ_BP = u * λ_NP    // هزینه تصمیم مرزی برای نکول
+   - λ_BN = v * λ_PN    // هزینه تصمیم مرزی برای غیرنکول
+   - ENSURE that λ_PP <= λ_BP < λ_NP, λ_NN <= λ_BN < λ_PN
+   - STORE (λ_PP, λ_PN, λ_BP, λ_BN, λ_NP, λ_NN) IN Report_Table_CostMatrix
+
+/* توجه: پارامترهای u,v در این مرحله نامعلوم‌اند؛ کاربر ممکن است
+   رویکرد دیگری برای λ_BP, λ_BN داشته باشد. */
+
+
+/////////////////////////////////////////////////////////////////////////////
+// 4. تعریف توابع تصمیم‌گیری سه‌طرفه و بهینه‌سازی چندهدفه
+/////////////////////////////////////////////////////////////////////////////
+
+/*
+  هدف: با تعریف دو تابع هدف:
+  f1(u,v) = cost_of_decision
+  f2(u,v) = sum_of_threshold_differences
+  الگوریتمی مثل NSGA-II برای یافتن u*, v* که به بهترین شکل هزینه تصمیم‌گیری و اندازه BND را کاهش دهد.
+*/
+
+// 4-1. فرمول محاسبه آستانه‌های سه‌طرفه
+9. DEFINE thresholds αᵢ(u,v), βᵢ(u,v)
+   // بر اساس فرمول‌های تصمیم‌گیری سه‌طرفه.
+//   یک نمونه فرمول عمومی:
+//     αᵢ = (λ(i)_PN - λ(i)_BN) / [ (λ(i)_PN - λ(i)_BN) + (λ(i)_BP - λ(i)_PP) ]
+//     βᵢ = (λ(i)_BN - λ(i)_NN) / [ (λ(i)_BN - λ(i)_NN) + (λ(i)_NP - λ(i)_BP) ]
+//   اما کاربر بسته به نیاز، فرمول‌های دقیق خود را می‌تواند اعمال کند.
+//   نکته مهم: αᵢ >= βᵢ اگر ناحیه BND خالی نباشد.
+
+10. DEFINE decision cost function for each record rᵢ:
+    - R(aP|rᵢ): cost if decide "accept as default"
+      = λ(i)_PN * (1 - p_default[rᵢ])
+    - R(aN|rᵢ): cost if decide "reject as default"
+      = λ(i)_NP * p_default[rᵢ]
+    - R(aB|rᵢ): cost if decide "boundary"
+      = λ(i)_BP * p_default[rᵢ] + λ(i)_BN * (1 - p_default[rᵢ])
+
+// مجموع هزینه سه‌طرفه:
+11. DEFINE f1(u,v):
+    FOR each record rᵢ:
+      CALCULATE αᵢ(u,v), βᵢ(u,v)
+      IF p_default[rᵢ] >= αᵢ THEN costᵢ = R(aP|rᵢ)
+      ELSE IF p_default[rᵢ] <= βᵢ THEN costᵢ = R(aN|rᵢ)
+      ELSE costᵢ = R(aB|rᵢ)
+    RETURN sum(costᵢ) over all rᵢ
+
+12. DEFINE f2(u,v) = Σᵢ [ αᵢ(u,v) - βᵢ(u,v) ]
+    // اندازه ناحیه مرزی را نشان می‌دهد
+
+13. SUBJECT TO constraints:
+    - 0 <= u,v <= 1
+    - u + v <= 1
+
+// 4-2. حل مدل چندهدفه با الگوریتم ژنتیکی
+14. NSGAII_Optimize(f1, f2, constraints):
+    - SET population_size, max_generations
+    - INITIALIZE population of (u, v)
+    - FOR each generation:
+       EVALUATE f1, f2 for all (u,v)
+       PERFORM nondominated sorting
+       SELECT offspring, crossover, mutate
+    - RETURN best (u*, v*) based on nondomination rank or user preference
+
+15. ONCE (u*,v*) is found, recalculates αᵢ(u*,v*), βᵢ(u*,v*) for each rᵢ
+    - STORE alpha, beta IN Report_Table_Main
+
+/////////////////////////////////////////////////////////////////////////////
+// 5. تخصیص نمونه‌ها به سه ناحیه (POS, NEG, BND)
+/////////////////////////////////////////////////////////////////////////////
+
+16. FOR each record rᵢ IN TestSet:
+    IF p_default[rᵢ] >= alpha[rᵢ] THEN
+       RegionLabel[rᵢ] = "POS"
+    ELSE IF p_default[rᵢ] <= beta[rᵢ] THEN
+       RegionLabel[rᵢ] = "NEG"
+    ELSE
+       RegionLabel[rᵢ] = "BND"
+    ENDIF
+    SAVE in Report_Table_Main
+
+// در این مرحله می‌توان جدولی از تعداد نمونه‌های POS/NEG/BND رسم کرد
+// و نموداری از توزیع p_default در هر ناحیه تولید نمود.
+
+/////////////////////////////////////////////////////////////////////////////
+// 6. تصمیم‌گیری نهایی برای نمونه‌های مرزی با مدل استکینگ
+/////////////////////////////////////////////////////////////////////////////
+
+17. EXTRACT BND_records = all rᵢ with RegionLabel == "BND"
+
+18. BASE_CLASSIFIERS = [RF, XGBoost, GBDT, ERT, AdaBoost, (optionally) LGBM]
+19. FOR each classifier c in BASE_CLASSIFIERS:
+    c.train( TrainingSet.features, TrainingSet.labels )
+
+20. CONSTRUCT meta_features for BND_records:
+    FOR each rᵢ in BND_records:
+      meta_input[rᵢ] = []
+      FOR each c in BASE_CLASSIFIERS:
+          prob_c = c.predict_proba(rᵢ.features)  // احتمال نکول
+          meta_input[rᵢ].append(prob_c)
+
+21. TRAIN meta_classifier (e.g. LogisticRegression) on (meta_input, true_labels)
+    // true_labels for BND_records should come from training partition
+    // or additional labeled data
+
+22. FOR each rᵢ in BND_records (TestSet):
+    final_decision[rᵢ] = meta_classifier.predict( meta_input[rᵢ] )
+    // برچسب نهایی نکول یا غیرنکول
+    STORE final_decision[rᵢ] in Report_Table_Main.FinalDecision
+
+/////////////////////////////////////////////////////////////////////////////
+// 7. محاسبه هزینه‌ها و معیارهای ارزیابی (Metrics & Cost)
+/////////////////////////////////////////////////////////////////////////////
+
+23. INITIALIZE TP=0, TN=0, FP=0, FN=0, totalCost=0
+24. FOR each rᵢ in TestSet:
+    trueLabel = rᵢ.TrueLabel   // (If available)
+    predictedLabel = IF RegionLabel==BND THEN final_decision ELSE RegionLabel
+    // 1: default, 0: nondefault
+
+    // محاسبه خطاهای طبقه‌بندی:
+    IF predictedLabel == 1 AND trueLabel == 1 THEN TP++
+    ELSE IF predictedLabel == 0 AND trueLabel == 0 THEN TN++
+    ELSE IF predictedLabel == 1 AND trueLabel == 0 THEN FP++
+    ELSE IF predictedLabel == 0 AND trueLabel == 1 THEN FN++
+
+    // محاسبه هزینه تصمیم
+    if predictedLabel==1 and RegionLabel[rᵢ]=="POS":
+       costᵢ = R(aP|rᵢ)
+    else if predictedLabel==0 and RegionLabel[rᵢ]=="NEG":
+       costᵢ = R(aN|rᵢ)
+    else
+       costᵢ = R(aB|rᵢ) // یا اگر final_decision=rᵢ==1 => apply λ_BP ; etc.
+    totalCost += costᵢ
+
+25. COMPUTE BalancedAccuracy = 0.5 * (TP/(TP+FP) + TN/(TN+FN))
+26. COMPUTE Precision, Recall, F1, etc.
+   - Precision = TP / (TP + FP)
+   - Recall = TP / (TP + FN)
+   - F1 = 2 * (Precision*Recall)/(Precision+Recall)
+27. COMPUTE AUC via rank-based method or ROC analysis
+28. GM = sqrt( (TP/(TP+FN)) * (TN/(TN+FP)) )
+29. costFinal = totalCost
+
+// داده‌های به دست آمده را در جدول/نمودار گزارش کنید:
+- ماتریس سردرگمی (TP,TN,FP,FN)
+- هزینه کل و هزینه تفکیکی هر بخش
+- نمودار ROC برای محاسبه AUC
+
+
+/////////////////////////////////////////////////////////////////////////////
+// 8. گزارش‌گیری نهایی (Tables & Charts)
+/////////////////////////////////////////////////////////////////////////////
+/*
+ در این بخش، کاربر می‌تواند بسته به نیازش انواع نمودار یا جدول را ایجاد کند؛ مثلاً:
+ 1) جدول خلاصه نتایج (SummaryTable) شامل:
+    - BalancedAccuracy, AUC, F1, GM, totalCost
+    - تعداد نمونه‌های POS/BND/NEG
+
+ 2) نمودار توزیع p_default در مقابل آستانه‌ها:
+    - نموداری که برای هر رکورد، p_default را روی محور x بگذارد و با دو خط عمودی αᵢ و βᵢ مرزبندی نماید
+
+ 3) نمودار هزینه:
+    - مقایسه هزینه تصمیم‌گیری نهایی با روش‌های دیگر
+
+ 4) نمودار ROC:
+    - رسم ROC Curve و محاسبه AUC
+*/
+
+END
