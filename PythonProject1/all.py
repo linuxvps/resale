@@ -25,8 +25,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder
-from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float, Text, \
-    SmallInteger
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xgboost import XGBClassifier
 
