@@ -2,7 +2,6 @@ import logging
 import os
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 from colorlog import ColoredFormatter
 # ------------------------------------------------------------
@@ -680,6 +679,21 @@ class ParsianThresholdNSGA2:
         """
         return self.best_solutions, self.front_costs
 
+    def get_final_solution(self):
+        """
+        از میان راه‌حل‌های پارتو، راه‌حل نهایی (α, β) را برمی‌گرداند که تعداد نمونه‌های ناحیه مرزی را به حداقل رسانده است.
+        خروجی: (final_solution, final_objectives)
+          final_solution: آرایه [alpha, beta]
+          final_objectives: آرایه [total_cost, boundary_size] مربوط به راه‌حل نهایی
+        """
+        solutions, objectives = self.get_pareto_front()
+        # انتخاب راه‌حل با کمترین مقدار objective دوم (boundary_size)
+        best_index = np.argmin(objectives[:, 1])
+        final_solution = solutions[best_index]
+        final_objectives = objectives[best_index]
+        return final_solution, final_objectives
+
+
 
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
@@ -747,5 +761,10 @@ if __name__ == "__main__":
         alpha, beta = sol
         cost_val, boundary_val = objectives[i]
         logging.info(f"  alpha={alpha:.3f}, beta={beta:.3f} => cost={cost_val:.2f}, boundary={boundary_val:.3f}")
+
+
+    # انتخاب راه‌حل نهایی از میان راه‌حل‌های پارتو بر اساس کمترین مقدار objective دوم (boundary_size)
+    final_solution, final_objectives = threshold_nsgaii.get_final_solution()
+    logging.warning(f"🔹 راه‌حل نهایی انتخاب شده: alpha={final_solution[0]:.3f}, beta={final_solution[1]:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
 
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
