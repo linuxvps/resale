@@ -492,6 +492,196 @@ class ParsianCostMatrix:
 
 
 ###########################################
+# گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II (pymoo)
+###########################################
+import numpy as np
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.problem import Problem
+from pymoo.optimize import minimize
+
+
+class ParsianThresholdNSGA2:
+    """
+    یک کلاس برای پیاده‌سازی گام چهارم تصمیم‌گیری سه‌طرفه به صورت چندهدفه:
+      - هدف اول: کمینه‌کردن هزینه تصمیم‌گیری
+      - هدف دوم: کمینه‌کردن اندازه ناحیه مرزی (BND)
+      با استفاده از الگوریتم NSGA-II از کتابخانه pymoo.
+
+    ورودی‌ها:
+      - probabilities_test: آرایه احتمال نکول نمونه‌های تست
+      - cost_matrix: آرایه یا لیستی از دیکشنری هزینه برای هر رکورد
+           مثال: cost_matrix[i] = {"PP": cost_if_true_and_decide_positive,
+                                   "PN": cost_if_false_and_decide_positive,
+                                   "NP": cost_if_true_and_decide_negative,
+                                   "NN": cost_if_false_and_decide_negative,
+                                   ...}
+      - true_labels: آرایه برچسب واقعی (۰ یا ۱)
+      - pop_size: اندازه جمعیت برای NSGA2
+      - n_gen: تعداد نسل (iteration) برای NSGA2
+    """
+
+    def __init__(
+            self,
+            probabilities_test: np.ndarray,
+            cost_matrix: list,
+            true_labels: np.ndarray,
+            pop_size=50,
+            n_gen=100,
+            step_bnd=False
+    ):
+        """
+        پارامترها:
+         - step_bnd: اگر True باشد، objective دوم را تعداد نمونه‌های BND در نظر می‌گیریم
+                     اگر False باشد، نسبت نمونه‌های BND به کل را در نظر می‌گیریم
+                     (هر دو رویکرد ممکن است.)
+        """
+        self.probabilities_test = probabilities_test  # احتمال نکول
+        self.cost_matrix = cost_matrix  # زیان هر رکورد
+        self.true_labels = true_labels
+        self.pop_size = pop_size
+        self.n_gen = n_gen
+        self.step_bnd = step_bnd
+
+        self.best_solutions = None  # راه‌حل‌های پارتو به‌دست‌آمده
+        self.front_costs = None  # مقدار اهداف در پارتو
+        self.problem_instance = None
+
+    def _decision_cost_for_sample(self, i, alpha, beta):
+        """
+        محاسبه هزینه تصمیم برای نمونه iام.
+        سه حالت:
+         - اگر p_i >= alpha => POS
+         - اگر p_i <= beta => NEG
+         - در غیر این صورت => BND (اینجا هزینه را می‌توان سفارشی کرد.)
+        """
+        p = self.probabilities_test[i]
+        y_true = self.true_labels[i]  # 0 یا 1
+        costs = self.cost_matrix[i]
+
+        if p >= alpha:
+            # تصمیم => نکول
+            return costs["PP"] if y_true == 1 else costs["PN"]
+        elif p <= beta:
+            # تصمیم => غیرنکول
+            return costs["NP"] if y_true == 1 else costs["NN"]
+        else:
+            # مرزی
+            # اگر بخواهید هزینه مرزی را هم اضافه کنید، باید آن را در cost_matrix[i] گنجانید
+            # مثلاً costs["BP"], costs["BN"] ...
+            # در اینجا برای سادگی 0 در نظر می‌گیریم
+            return 0.0
+
+    def _boundary_count_for_solution(self, alpha, beta):
+        """
+        تعداد (یا نسبت) نمونه‌هایی که در ناحیه مرزی قرار می‌گیرند:
+         یعنی sample i که p_i ∈ (beta, alpha)
+        """
+        p = self.probabilities_test
+        bnd_mask = (p > beta) & (p < alpha)
+        bnd_count = np.sum(bnd_mask)
+        if self.step_bnd:
+            return bnd_count  # تعداد نمونه‌های مرزی
+        else:
+            return bnd_count / len(p)  # نسبت نمونه‌های مرزی به کل
+
+    class ThresholdOptimizationProblem(Problem):
+        """
+        کلاس مسئله pymoo برای NSGA-II.
+        n_var=2 => (alpha, beta)
+        n_obj=2 => هدف اول: هزینه، هدف دوم: اندازه ناحیه مرزی
+        n_constr=1 => alpha >= beta  => beta - alpha <= 0
+        xl=[0,0], xu=[1,1] => alpha,beta ∈ [0,1]
+        """
+
+        def __init__(
+                self,
+                outer,
+        ):
+            """
+            - outer: یک اشاره به کلاس بیرونی ParsianThresholdNSGA2
+                     تا بتوانیم از داده‌های probabilities_test و ... استفاده کنیم.
+            """
+            super().__init__(
+                n_var=2,
+                n_obj=2,
+                n_constr=1,
+                xl=np.array([0.0, 0.0]),
+                xu=np.array([1.0, 1.0]),
+                type_var=np.double
+            )
+            self.outer = outer  # ارجاع به کلاس بیرونی
+
+        def _evaluate(self, X, out, *args, **kwargs):
+            """
+            X آرایه‌ای شکل (N, 2) است که در هر سطر:
+              X[i,0] = alpha
+              X[i,1] = beta
+            باید 2 هدف محاسبه شود: total_cost, boundary_size
+            همچنین یک محدودیت: alpha >= beta => beta - alpha <= 0
+            """
+            n_solutions = X.shape[0]
+            f1 = np.zeros(n_solutions)  # هزینه
+            f2 = np.zeros(n_solutions)  # اندازه مرزی
+
+            for i_sol in range(n_solutions):
+                alpha = X[i_sol, 0]
+                beta = X[i_sol, 1]
+
+                # محاسبه هزینه کل
+                total_cost = 0.0
+                for i_sample in range(len(self.outer.probabilities_test)):
+                    c = self.outer._decision_cost_for_sample(i_sample, alpha, beta)
+                    total_cost += c
+
+                # محاسبه اندازه مرزی
+                boundary_size = self.outer._boundary_count_for_solution(alpha, beta)
+
+                f1[i_sol] = total_cost
+                f2[i_sol] = boundary_size
+
+            # محدودیت: alpha >= beta => (beta - alpha) <= 0
+            g = np.zeros((n_solutions, 1))
+            g[:, 0] = X[:, 1] - X[:, 0]  # beta - alpha => باید <= 0
+
+            out["F"] = np.column_stack([f1, f2])
+            out["G"] = g
+
+    def optimize(self):
+        """
+        اجرای الگوریتم NSGA-II برای کمینه‌کردن [cost, boundary_size]
+        با محدودیت alpha >= beta.
+        """
+        logging.info("🔵 شروع بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II...")
+
+        # ساخت نمونه مسئله
+        self.problem_instance = self.ThresholdOptimizationProblem(self)
+
+        # الگوریتم NSGA2
+        algo = NSGA2(pop_size=self.pop_size)
+
+        # اجرای بهینه‌سازی
+        res = minimize(
+            self.problem_instance,
+            algo,
+            ("n_gen", self.n_gen),
+            seed=42,
+            verbose=False
+        )
+
+        self.front_costs = res.F  # هدف‌های راه‌حل‌های پارتو
+        self.best_solutions = res.X  # خود راه‌حل‌ها (alpha,beta) در پارتو
+        logging.info("✅ NSGA-II به اتمام رسید. تعداد راه‌حل‌های پارتو: {}".format(len(self.front_costs)))
+
+    def get_pareto_front(self):
+        """
+        برمی‌گرداند (solutions, objectives) = (self.best_solutions, self.front_costs)
+        جایی که هر solutions[i] = [alpha_i, beta_i]
+              each objectives[i] = [cost_i, boundary_i]
+        """
+        return self.best_solutions, self.front_costs
+
+
+###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
 ###########################################
 if __name__ == "__main__":
@@ -539,5 +729,23 @@ if __name__ == "__main__":
     cost_calc.compute_costs()
     all_costs = cost_calc.get_all_costs()
 
-    logging.info(f"نمونه‌ای از cost_matrix[0]: {all_costs[0]}")
-    logging.info("گام سوم (محاسبه ماتریس زیان) با موفقیت انجام شد.")
+    # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II
+    from numpy import array
+    threshold_nsgaii = ParsianThresholdNSGA2(
+        probabilities_test=probabilities_test,
+        cost_matrix=all_costs,
+        true_labels=y_test.values,  # یا array(y_test)
+        pop_size=50,
+        n_gen=100,
+        step_bnd=False
+    )
+    threshold_nsgaii.optimize()
+
+    solutions, objectives = threshold_nsgaii.get_pareto_front()
+    logging.info("🔹 راه‌حل‌های پارتو (alpha,beta) و مقدار اهداف (cost,boundary):")
+    for i, sol in enumerate(solutions):
+        alpha, beta = sol
+        cost_val, boundary_val = objectives[i]
+        logging.info(f"  alpha={alpha:.3f}, beta={beta:.3f} => cost={cost_val:.2f}, boundary={boundary_val:.3f}")
+
+    logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
