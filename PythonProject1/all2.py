@@ -5,7 +5,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from colorlog import ColoredFormatter
-from numpy.f2py.cfuncs import needs
 # ------------------------------------------------------------
 # بخش مربوط به SQLAlchemy برای اتصال به دیتابیس و تعریف انتیتی
 # ------------------------------------------------------------
@@ -131,7 +130,6 @@ class LoanRepository:
 ###########################################
 # گام دوم: برآورد احتمال نکول (Default Probability)
 ###########################################
-from lightgbm import LGBMClassifier
 
 class ParsianDefaultProbabilityModel:
     """
@@ -411,6 +409,89 @@ class ParsianPreprocessingManager:
 
 
 ###########################################
+# گام سوم: محاسبه ماتریس زیان (Cost Computation)
+###########################################
+class ParsianCostMatrix:
+    """
+    در این کلاس، بر اساس داده‌های جریان نقدی (مثلاً approval_amount, interest_amount)
+    هزینه‌های تصمیم‌گیری برای هر نمونه محاسبه می‌شود.
+
+    فرض می‌کنیم dataframe تست (x_test) را داشته باشیم که ستون‌های مالی در آن وجود دارد.
+    مثلاً approval_amount, interest_amount.
+
+    سپس چهار نوع زیان اصلی را تعریف می‌کنیم:
+      λ_PP, λ_NN (معمولاً 0)
+      λ_PN (زیان پذیرش اشتباه)
+      λ_NP (زیان رد اشتباه)
+
+    کاربر می‌تواند بسته به نیازش این فرمول‌ها را شخصی‌سازی کند.
+    """
+
+    def __init__(self, df_test: pd.DataFrame, approval_col="approval_amount", interest_col="interest_amount"):
+        """
+        پارامترها:
+          - df_test: داده‌های آزمون، شامل ستون‌های مالی لازم
+          - approval_col: نام ستونی که اصل وام را نگه می‌دارد (approval_amount)
+          - interest_col: نام ستونی که سود بالقوه یا مبلغ بهره را نشان می‌دهد (interest_amount)
+        """
+        self.df_test = df_test.reset_index(drop=True)  # اگر لازم است ایندکس ریست شود
+        self.approval_col = approval_col
+        self.interest_col = interest_col
+
+        # در این دیکشنری هزینه‌های تصمیم را برای هر نمونه نگه می‌داریم
+        # مثال: cost_matrix[i] = {
+        #    "PP": val, "PN": val, "BP": val, "BN": val, "NP": val, "NN": val
+        # }
+        self.cost_matrix = []
+
+    def compute_costs(self):
+        """
+        محاسبه زیان برای هر رکورد در df_test.
+        در این مثال، فرمول‌ها را بدین صورت تعریف می‌کنیم:
+          λ_PP = 0
+          λ_NN = 0
+          λ_PN = interest_amount
+          λ_NP = approval_amount + interest_amount
+          (اگر بخواهیم λ_BP و λ_BN هم داشته باشیم، می‌توانیم اضافه کنیم)
+        """
+        if self.approval_col not in self.df_test.columns or self.interest_col not in self.df_test.columns:
+            raise ValueError("ستون‌های مالی برای محاسبه زیان موجود نیست.")
+
+        for i in range(len(self.df_test)):
+            principal = float(self.df_test.loc[i, self.approval_col] or 0.0)
+            interest = float(self.df_test.loc[i, self.interest_col] or 0.0)
+
+            cost_pp = 0.0
+            cost_nn = 0.0
+            cost_pn = interest  # پذیرش اشتباه نمونه‌ای که واقعاً غیرنکول است
+            cost_np = principal + interest  # رد اشتباه نمونه‌ای که واقعاً نکول است
+
+            # اگر بخواهیم هزینه تصمیم مرزی اضافه کنیم:
+            # cost_bp = ...
+            # cost_bn = ...
+
+            self.cost_matrix.append({
+                "PP": cost_pp,
+                "NN": cost_nn,
+                "PN": cost_pn,
+                "NP": cost_np
+                # "BP": cost_bp,
+                # "BN": cost_bn
+            })
+
+    def get_cost_for_sample(self, index: int):
+        """
+        گرفتن هزینه تصمیم‌ها برای رکورد iام.
+        خروجی یک دیکشنری با کلیدهای PP, PN, NP, NN (و در صورت وجود BP, BN)
+        """
+        return self.cost_matrix[index]
+
+    def get_all_costs(self):
+        """ برمی‌گرداند کل cost_matrix به صورت لیستی از دیکشنری‌ها. """
+        return self.cost_matrix
+
+
+###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
 ###########################################
 if __name__ == "__main__":
@@ -452,3 +533,11 @@ if __name__ == "__main__":
     logging.info(f"احتمال نکول برای اولین 5 نمونه: {probabilities_test[:5]}")
     logging.info("گام دوم (برآورد احتمال نکول) با موفقیت انجام شد.")
 
+    # 3) گام سوم: محاسبه ماتریس زیان
+    # فرض می‌کنیم x_test دارای ستون‌های approval_amount و interest_amount است.
+    cost_calc = ParsianCostMatrix(df_test=x_test, approval_col="approval_amount", interest_col="interest_amount")
+    cost_calc.compute_costs()
+    all_costs = cost_calc.get_all_costs()
+
+    logging.info(f"نمونه‌ای از cost_matrix[0]: {all_costs[0]}")
+    logging.info("گام سوم (محاسبه ماتریس زیان) با موفقیت انجام شد.")
