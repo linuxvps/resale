@@ -845,6 +845,118 @@ class ParsianBNDResolver:
             decisions_updated[idx] = pred  # pred=0 => NEG, pred=1 => POS
         return decisions_updated
 
+###########################################
+# گام هفتم: ارزیابی نهایی و گزارش (Final Evaluation)
+###########################################
+import numpy as np
+from sklearn.metrics import confusion_matrix, roc_auc_score, precision_score, recall_score, f1_score
+
+class ParsianFinalEvaluator:
+    """
+    در این کلاس، برچسب‌های نهایی تصمیم (بعد از گام ششم) را با برچسب واقعی
+    مقایسه می‌کنیم و معیارهای عملکرد را محاسبه و گزارش می‌دهیم.
+    """
+
+    def __init__(
+        self,
+        true_labels: np.ndarray,
+        final_decisions: np.ndarray,
+        probabilities_test: np.ndarray = None,
+        cost_matrix: list = None
+    ):
+        """
+        پارامترها:
+          - true_labels: آرایه برچسب‌های واقعی تست (۰ یا ۱)
+          - final_decisions: آرایه تصمیم‌های نهایی (۰=NEG, ۱=POS)
+          - probabilities_test: اگر می‌خواهیم AUC یا معیارهای احتمالاتی را حساب کنیم
+          - cost_matrix: اگر بخواهیم هزینه تصمیم‌گیری را نیز محاسبه نماییم. (مثلاً خروجی گام سوم)
+        """
+        self.true_labels = true_labels
+        self.final_decisions = final_decisions
+        self.probabilities_test = probabilities_test
+        self.cost_matrix = cost_matrix
+
+    def evaluate_metrics(self):
+        """
+        محاسبه معیارهای اصلی نظیر:
+         - Balanced Accuracy
+         - Precision, Recall, F1
+         - AUC (در صورت وجود probabilities_test)
+         - هزینه تصمیم (در صورت وجود cost_matrix)
+        خروجی: دیکشنری شامل مقادیر معیارها
+        """
+
+        if len(self.true_labels) != len(self.final_decisions):
+            raise ValueError("طول برچسب‌های واقعی با تصمیم‌های نهایی همخوانی ندارد.")
+
+        # محاسبه confusion matrix
+        cm = confusion_matrix(self.true_labels, self.final_decisions)
+        # cm ساختار [[TN, FP], [FN, TP]]
+        TN, FP, FN, TP = cm.ravel()
+
+        # محاسبه Balanced Accuracy
+        # = 0.5 * (TP/(TP+FN) + TN/(TN+FP))
+        sensitivity = TP / (TP + FN) if (TP+FN) != 0 else 0
+        specificity = TN / (TN + FP) if (TN+FP) != 0 else 0
+        b_acc = 0.5 * (sensitivity + specificity)
+
+        # Precision, Recall, F1
+        precision = precision_score(self.true_labels, self.final_decisions, zero_division=0)
+        recall = recall_score(self.true_labels, self.final_decisions, zero_division=0)
+        f1 = f1_score(self.true_labels, self.final_decisions, zero_division=0)
+
+        # AUC
+        auc_val = None
+        if self.probabilities_test is not None:
+            # اگر probabilities_test خروجی predict_proba (ستون کلاس ۱) باشد:
+            try:
+                auc_val = roc_auc_score(self.true_labels, self.probabilities_test)
+            except Exception:
+                auc_val = None
+
+        # محاسبه هزینه تصمیم، در صورتی که cost_matrix داشته باشیم
+        # فرض بر این است که cost_matrix[i] = {"PP", "PN", "NP", "NN"}
+        # و final_decisions[i] = 1 => POS, 0 => NEG
+        # true_labels[i] = 1 => نمونه واقعی نکول, 0 => غیرنکول
+        total_cost = None
+        if self.cost_matrix is not None:
+            if len(self.cost_matrix) != len(self.true_labels):
+                logging.warning("طول cost_matrix با دادهٔ تست همخوانی ندارد؛ هزینه محاسبه نمی‌شود.")
+            else:
+                total_cost_calc = 0.0
+                for i in range(len(self.true_labels)):
+                    y_true = self.true_labels[i]
+                    y_pred = self.final_decisions[i]
+                    costs = self.cost_matrix[i]
+                    # اگر y_pred=1 و y_true=1 => PP
+                    # اگر y_pred=1 و y_true=0 => PN
+                    # اگر y_pred=0 و y_true=1 => NP
+                    # اگر y_pred=0 و y_true=0 => NN
+                    if y_pred == 1 and y_true == 1:
+                        total_cost_calc += costs["PP"]
+                    elif y_pred == 1 and y_true == 0:
+                        total_cost_calc += costs["PN"]
+                    elif y_pred == 0 and y_true == 1:
+                        total_cost_calc += costs["NP"]
+                    elif y_pred == 0 and y_true == 0:
+                        total_cost_calc += costs["NN"]
+                total_cost = total_cost_calc
+
+        metrics_dict = {
+            "TN": TN,
+            "FP": FP,
+            "FN": FN,
+            "TP": TP,
+            "BalancedAccuracy": b_acc,
+            "Precision": precision,
+            "Recall": recall,
+            "F1": f1,
+            "AUC": auc_val,
+            "TotalCost": total_cost
+        }
+        return metrics_dict
+
+
 
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
@@ -942,6 +1054,15 @@ if __name__ == "__main__":
     logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
     logging.info(f" count POS={np.sum(decisions_updated==1)}, NEG={np.sum(decisions_updated==0)}, BND={np.sum(decisions_updated==-1)}")
 
-
-
+    # 7) گام هفتم: Evaluation نهایی
+    final_eval = ParsianFinalEvaluator(
+        true_labels=y_test.values,
+        final_decisions=decisions_updated,
+        probabilities_test=probabilities_test,  # اگر AUC بخواهیم
+        cost_matrix=all_costs                  # اگر هزینه بخواهیم
+    )
+    results = final_eval.evaluate_metrics()
+    logging.info("🔹 نتایج نهایی مدل:")
+    for k, v in results.items():
+        logging.info(f"  {k}: {v}")
 
