@@ -758,6 +758,93 @@ class ParsianThreeWayDecision:
         unique, counts = np.unique(self.decisions, return_counts=True)
         return dict(zip(unique, counts))
 
+###########################################
+# گام ششم: تصمیم‌گیری نهایی روی نمونه‌های BND
+#          (مثلاً با استکینگ یا مدل کمکی دیگر)
+###########################################
+from sklearn.ensemble import StackingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
+
+class ParsianBNDResolver:
+    """
+    این کلاس نمونه‌هایی را که در گام پنجم در ناحیه BND واقع شده‌اند،
+    شناسایی و با یک مدل اضافی (مثلاً استکینگ) تصمیم قطعی (POS یا NEG) می‌گیرد.
+    """
+
+    def __init__(
+        self,
+        x_train_all: pd.DataFrame,
+        y_train_all: pd.Series,
+        model_type="stacking"
+    ):
+        """
+        پارامترها:
+          - x_train_all, y_train_all: داده‌های آموزش اصلی (یا داده‌های مرزی خاص؟)
+          - model_type: نوع مدلی که می‌خواهیم برای تشخیص نمونه‌های مرزی به‌کار بریم
+                       (اینجا مثلاً "stacking" یا "bagging" یا ...)
+        """
+        self.x_train_all = x_train_all
+        self.y_train_all = y_train_all
+        self.model_type = model_type
+        self.classifier = None
+
+    def fit_bnd_model(self):
+        """
+        آموزش مدل استکینگ یا هر مدل دیگر بر روی کل دادهٔ آموزش.
+        توجه: می‌توانیم بنا به نیاز، فقط نمونه‌های دشوار یا بخشی از دیتاست را استفاده کنیم.
+        """
+        if self.model_type.lower() == "stacking":
+            # چندین مدل پایه + متا
+            base_estimators = [
+                ("rf", RandomForestClassifier(n_estimators=50, random_state=42)),
+                ("xgb", XGBClassifier(eval_metric="logloss", random_state=42))
+            ]
+            meta_estimator = LogisticRegression(max_iter=1000, random_state=42)
+            self.classifier = StackingClassifier(
+                estimators=base_estimators,
+                final_estimator=meta_estimator,
+                cv=5,
+                n_jobs=-1
+            )
+        else:
+            # می‌توانید روش‌های دیگر را اضافه کنید
+            raise ValueError("فقط مدل 'stacking' پیاده شده است.")
+
+        logging.info("🔵 در حال آموزش مدل BNDResolver (استکینگ)...")
+        self.classifier.fit(self.x_train_all, self.y_train_all)
+        logging.info("✅ آموزش مدل BNDResolver کامل شد.")
+
+    def resolve_bnd_samples(
+        self,
+        x_test: pd.DataFrame,
+        decisions_final: np.ndarray
+    ):
+        """
+        پارامترها:
+         - x_test: داده‌های تست کامل
+         - decisions_final: برچسب تصمیم گام پنجم (POS=1, NEG=0, BND=-1)
+        خروجی:
+         - decisions_updated: آرایه‌ی تصمیم نهایی که BNDها را نیز به POS یا NEG تبدیل می‌کند.
+        """
+        bnd_indices = np.where(decisions_final == -1)[0]
+        logging.info(f"🔵 تعداد نمونه‌های BND: {len(bnd_indices)}")
+
+        if len(bnd_indices) == 0:
+            logging.info("هیچ نمونه مرزی وجود ندارد. تغییری اعمال نمی‌شود.")
+            return decisions_final  # همان قبلی
+
+        # استخراج نمونه‌های BND از x_test
+        x_test_bnd = x_test.iloc[bnd_indices]
+        # پیش‌بینی مدل ثانویه
+        y_pred_bnd = self.classifier.predict(x_test_bnd)
+
+        # به‌روزرسانی تصمیم نهایی
+        decisions_updated = decisions_final.copy()
+        for idx, pred in zip(bnd_indices, y_pred_bnd):
+            decisions_updated[idx] = pred  # pred=0 => NEG, pred=1 => POS
+        return decisions_updated
+
 
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
@@ -841,6 +928,19 @@ if __name__ == "__main__":
                  f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
                  f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
+    # 6) گام ششم: تصمیم‌گیری روی BNDها
+    bnd_resolver = ParsianBNDResolver(
+        x_train_all=x_train,
+        y_train_all=y_train,
+        model_type="stacking"
+    )
+    bnd_resolver.fit_bnd_model()
+
+    # اعمال مدل استکینگ روی نمونه‌های مرزی
+    decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
+
+    logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
+    logging.info(f" count POS={np.sum(decisions_updated==1)}, NEG={np.sum(decisions_updated==0)}, BND={np.sum(decisions_updated==-1)}")
 
 
 
