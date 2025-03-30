@@ -27,6 +27,54 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 pd.set_option('display.float_format', lambda x: '%.2f' % x)
 
+###########################################
+# پلات
+###########################################
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import Tuple
+
+
+class ProbabilityVisualizer:
+    """
+    یک کلاس عمومی برای بصری‌سازی توزیع احتمال‌ها.
+    """
+
+    def __init__(self) -> None:
+        pass
+
+    def visualize_distribution(self, probabilities: np.ndarray, bins: int = 20,
+                               figsize: Tuple[int, int] = (10, 6)) -> None:
+        """
+        نمودار هیستوگرام توزیع احتمال‌ها را بر اساس آرایه ورودی رسم می‌کند.
+        با افزودن جزئیات مانند خط میانگین، برچسب‌های دقیق محور و تنظیمات grid.
+
+        :param probabilities: آرایه numpy شامل احتمال‌ها.
+        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 20).
+        :param figsize: اندازه شکل نمودار (پیش‌فرض (10, 6)).
+        """
+        plt.figure(figsize=figsize)
+
+        # رسم هیستوگرام
+        n, bins, patches = plt.hist(probabilities, bins=bins, edgecolor='black',
+                                    alpha=0.7, color='skyblue')
+
+        # محاسبه و نمایش خط میانگین
+        mean_val = np.mean(probabilities)
+        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2,
+                    label=f'Mean = {mean_val:.2f}')
+
+        # افزودن جزئیات به نمودار
+        plt.title("Distribution of Default Probabilities", fontsize=16)
+        plt.xlabel("Probability", fontsize=14)
+        plt.ylabel("Frequency", fontsize=14)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.legend(fontsize=12)
+        plt.tight_layout()
+        plt.show()
+
 
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
@@ -1071,6 +1119,9 @@ if __name__ == "__main__":
         random_state=42)
     default_model.fit_model(x_train, y_train)
     probabilities_test = default_model.predict_default_probability(x_test)
+
+    visualizer = ProbabilityVisualizer()
+    visualizer.visualize_distribution(probabilities_test)
 
     logging.info(f"احتمال نکول برای اولین 5 نمونه: {probabilities_test[:5]}")
     logging.info("گام دوم (برآورد احتمال نکول) با موفقیت انجام شد.")
