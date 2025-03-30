@@ -942,6 +942,9 @@ class ParsianFinalEvaluator:
                         total_cost_calc += costs["NN"]
                 total_cost = total_cost_calc
 
+        # محاسبه GM به صورت sqrt((TP/(TP+FN)) * (TN/(TN+FP)))
+        gm = np.sqrt((TP / (TP + FN)) * (TN / (TN + FP))) if (TP + FN) != 0 and (TN + FP) != 0 else 0
+
         metrics_dict = {
             "TN": TN,
             "FP": FP,
@@ -951,6 +954,7 @@ class ParsianFinalEvaluator:
             "Precision": precision,
             "Recall": recall,
             "F1": f1,
+            "GM": gm,
             "AUC": auc_val,
             "TotalCost": total_cost
         }
