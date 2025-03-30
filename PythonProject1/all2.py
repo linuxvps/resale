@@ -101,7 +101,7 @@ class LoanRepository:
         SessionLocal = sessionmaker(bind=self.engine)
         self.session = SessionLocal()
 
-    def fetch_loans(self, limit=10000):
+    def fetch_loans(self, limit=10_000):
         """
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
