@@ -694,6 +694,70 @@ class ParsianThresholdNSGA2:
         return final_solution, final_objectives
 
 
+###########################################
+# گام پنجم: تقسیم نمونه‌ها به POS/NEG/BND (Three-Way Decision)
+###########################################
+
+class ParsianThreeWayDecision:
+    """
+    در این گام، با داشتن احتمالات نکول p و آستانه‌های alpha و beta،
+    هر نمونه را به یکی از سه دسته POS/NEG/BND تخصیص می‌دهیم.
+
+    اگر:
+      p_i >= alpha  =>  POS
+      p_i <= beta   =>  NEG
+      otherwise     =>  BND
+    """
+
+    def __init__(self, probabilities_test: np.ndarray, alpha: float, beta: float):
+        """
+        پارامترها:
+          - probabilities_test: آرایه احتمال نکول برای داده‌های تست
+          - alpha, beta: آستانه‌های تصمیم سه‌طرفه
+        """
+        self.probabilities_test = probabilities_test
+        self.alpha = alpha
+        self.beta = beta
+        self.decisions = None  # لیبل نهایی هر نمونه: POS=1, NEG=0, BND=-1 (مثلاً)
+
+    def apply_three_way_decision(self):
+        """
+        با توجه به alpha و beta، روی probabilities_test اجرا کرده
+        و سه دسته‌بندی را بازمی‌گرداند.
+        """
+        n_samples = len(self.probabilities_test)
+        decisions = np.zeros(n_samples, dtype=int)  # 0 => NEG, 1 => POS, -1 => BND
+
+        for i in range(n_samples):
+            p_i = self.probabilities_test[i]
+            if p_i >= self.alpha:
+                decisions[i] = 1  # POS
+            elif p_i <= self.beta:
+                decisions[i] = 0  # NEG
+            else:
+                decisions[i] = -1  # BND
+
+        self.decisions = decisions
+        return decisions
+
+    def get_decisions(self):
+        """
+        اگر از قبل apply_three_way_decision را صدا زده باشیم،
+        تصمیم نهایی را برمی‌گردانیم.
+        خروجی یک آرایه با مقادیر {0=NEG, 1=POS, -1=BND}.
+        """
+        return self.decisions
+
+    def get_decision_counts(self):
+        """
+        تعداد نمونه‌های هر دسته (POS=1, NEG=0, BND=-1) را محاسبه و برمی‌گرداند.
+        خروجی: دیکشنری به شکل {1: تعداد POS, 0: تعداد NEG, -1: تعداد BND}
+        """
+        if self.decisions is None:
+            self.apply_three_way_decision()
+        unique, counts = np.unique(self.decisions, return_counts=True)
+        return dict(zip(unique, counts))
+
 
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
@@ -765,6 +829,19 @@ if __name__ == "__main__":
 
     # انتخاب راه‌حل نهایی از میان راه‌حل‌های پارتو بر اساس کمترین مقدار objective دوم (boundary_size)
     final_solution, final_objectives = threshold_nsgaii.get_final_solution()
-    logging.warning(f"🔹 راه‌حل نهایی انتخاب شده: alpha={final_solution[0]:.3f}, beta={final_solution[1]:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
-
+    best_alpha, best_beta = final_solution[0], final_solution[1]
+    logging.warning(
+        f"🔹 🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
+
+    threeway = ParsianThreeWayDecision(probabilities_test, best_alpha, best_beta)
+    decisions_final = threeway.apply_three_way_decision()
+    logging.info(f"decisions      : {decisions_final}")
+    logging.info(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
+                 f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
+                 f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
+
+
+
+
+
