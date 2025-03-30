@@ -1100,7 +1100,7 @@ if __name__ == "__main__":
     final_solution, final_objectives = threshold_nsgaii.get_final_solution()
     best_alpha, best_beta = final_solution[0], final_solution[1]
     logging.warning(
-        f"🔹 🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
+        f"🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
 
     threeway = ParsianThreeWayDecision(probabilities_test, best_alpha, best_beta)
