@@ -1000,10 +1000,8 @@ class ParsianMethodComparison:
         logging.info("🔵 شروع مقایسه با سایر روش‌ها (گام ۹) ...")
         results_list = []
         for model_name, model_obj in self.model_comparisons.items():
-            logging.info(f"🔵 آموزش مدل {model_name} ...")
             model_obj.fit(self.x_train, self.y_train)
 
-            logging.info(f"🔵 پیش‌بینی مدل {model_name} روی داده تست ...")
             y_pred = model_obj.predict(self.x_test)
 
             y_prob = None
@@ -1107,7 +1105,6 @@ if __name__ == "__main__":
 
     threeway = ParsianThreeWayDecision(probabilities_test, best_alpha, best_beta)
     decisions_final = threeway.apply_three_way_decision()
-    logging.info(f"decisions      : {decisions_final}")
     logging.info(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
                  f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
                  f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
