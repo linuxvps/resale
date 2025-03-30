@@ -33,6 +33,10 @@ logger = logging.getLogger()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 1000)
+pd.set_option('display.float_format', lambda x: '%.2f' % x)
+
 
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
@@ -946,6 +950,7 @@ class ParsianFinalEvaluator:
         gm = np.sqrt((TP / (TP + FN)) * (TN / (TN + FP))) if (TP + FN) != 0 and (TN + FP) != 0 else 0
 
         metrics_dict = {
+            "ModelName": "Proposed-3WD",
             "TN": TN,
             "FP": FP,
             "FN": FN,
@@ -960,7 +965,214 @@ class ParsianFinalEvaluator:
         }
         return metrics_dict
 
+from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
+from math import sqrt
+import logging
 
+class ParsianMethodComparison:
+    """
+    در این گام، مجموعه‌ای از مدل‌های رقیب (Baseline) را بر روی داده‌های آموزش
+    آموزش داده و سپس بر روی داده‌های تست ارزیابی می‌کنیم تا با روش پیشنهادی
+    (سه‌طرفه) مقایسه شوند.
+
+    معیارهای ارزیابی:
+      - TP, TN, FP, FN از ماتریس سردرگمی
+      - BalancedAccuracy = 0.5 * (TP/(TP+FN) + TN/(TN+FP))
+      - Precision, Recall, F1 (یا FM با β=1)
+      - GM = sqrt( (TP/(TP+FN)) * (TN/(TN+FP)) )
+      - AUC (در صورت وجود احتمال پیش‌بینی)
+      - TotalCost (در صورت وجود cost_matrix)
+    """
+
+    def __init__(
+            self,
+            x_train: pd.DataFrame,
+            y_train: pd.Series,
+            x_test: pd.DataFrame,
+            y_test: pd.Series,
+            cost_matrix: list = None,
+            model_comparisons: dict = None
+    ):
+        """
+        پارامترها:
+         - x_train, y_train: داده‌های آموزش
+         - x_test, y_test: داده‌های تست
+         - cost_matrix: در صورت نیاز برای محاسبه هزینه تصمیم (مانند گام ۳)
+         - model_comparisons: دیکشنری { ModelName: model_object } برای مدل‌های رقیب
+        """
+        self.x_train = x_train
+        self.y_train = y_train
+        self.x_test = x_test
+        self.y_test = y_test
+        self.cost_matrix = cost_matrix
+
+        if model_comparisons is None:
+            from sklearn.naive_bayes import GaussianNB
+            from sklearn.neighbors import KNeighborsClassifier
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.neural_network import MLPClassifier
+            from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier, \
+                RandomForestClassifier, BaggingClassifier
+            from lightgbm import LGBMClassifier
+            from xgboost import XGBClassifier
+            from sklearn.ensemble import StackingClassifier
+            from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+            self.model_comparisons = {
+                "Bayes": GaussianNB(),
+                "KNN": KNeighborsClassifier(),
+                "LR": LogisticRegression(max_iter=10_000),
+                "NN": MLPClassifier(max_iter=300),
+                "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),
+                "ERT": ExtraTreesClassifier(),
+                "GBDT": GradientBoostingClassifier(),
+                "LGBM": LGBMClassifier(verbose=-1),
+                "RF": RandomForestClassifier(),
+                "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
+                "Stacking": StackingClassifier(estimators=[
+                    ('lda', LinearDiscriminantAnalysis()),
+                    ('knn', KNeighborsClassifier())
+                ], final_estimator=RandomForestClassifier()),
+                "Bagging": BaggingClassifier(
+                    estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
+                    n_estimators=10,
+                    random_state=42
+                )
+            }
+        else:
+            self.model_comparisons = model_comparisons
+
+        self.comparison_table = None
+
+    def _compute_metrics(self, y_true, y_pred, y_prob=None, cost_matrix=None):
+        """
+        محاسبه معیارهای عملکرد: TP, TN, FP, FN, BalancedAccuracy, Precision, Recall, F1, GM, AUC و TotalCost.
+        """
+        cm = confusion_matrix(y_true, y_pred)
+        TN, FP, FN, TP = cm.ravel()
+
+        # Balanced Accuracy
+        b_acc = 0.5 * (
+            (TP / (TP + FN) if (TP + FN) > 0 else 0) +
+            (TN / (TN + FP) if (TN + FP) > 0 else 0)
+        )
+
+        # Precision و Recall
+        precision = precision_score(y_true, y_pred, zero_division=0)
+        recall = recall_score(y_true, y_pred, zero_division=0)
+
+        # F1 (که همان FM با β=1 است)
+        f1 = f1_score(y_true, y_pred, zero_division=0)
+
+        # GM
+        sensitivity = TP / (TP + FN) if (TP + FN) > 0 else 0
+        specificity = TN / (TN + FP) if (TN + FP) > 0 else 0
+        gm = sqrt(sensitivity * specificity)
+
+        # AUC
+        auc_val = None
+        if y_prob is not None:
+            from sklearn.metrics import roc_auc_score
+            try:
+                auc_val = roc_auc_score(y_true, y_prob)
+            except Exception:
+                auc_val = None
+
+        # محاسبه هزینه تصمیم (TotalCost)
+        total_cost = None
+        if cost_matrix is not None and len(cost_matrix) == len(y_true):
+            tc = 0.0
+            for i in range(len(y_true)):
+                yi = y_true[i]
+                yp = y_pred[i]
+                costs = cost_matrix[i]
+                if yi == 1 and yp == 1:
+                    tc += costs["PP"]
+                elif yi == 0 and yp == 1:
+                    tc += costs["PN"]
+                elif yi == 1 and yp == 0:
+                    tc += costs["NP"]
+                elif yi == 0 and yp == 0:
+                    tc += costs["NN"]
+            total_cost = tc
+
+        return {
+            "TP": TP,
+            "TN": TN,
+            "FP": FP,
+            "FN": FN,
+            "BalancedAccuracy": b_acc,
+            "Precision": precision,
+            "Recall": recall,
+            "F1": f1,
+            "GM": gm,
+            "AUC": auc_val,
+            "TotalCost": total_cost
+        }
+
+    def run_comparison(self):
+        """
+        برای هر مدل در مدل‌های رقیب:
+          - آموزش روی x_train, y_train
+          - پیش‌بینی روی x_test (y_pred و در صورت امکان y_prob)
+          - محاسبه معیارها
+          - ثبت نتایج در یک DataFrame
+        خروجی: DataFrame شامل نتایج مقایسه
+        """
+        logging.info("🔵 شروع مقایسه با سایر روش‌ها (گام ۹) ...")
+        results_list = []
+        for model_name, model_obj in self.model_comparisons.items():
+            logging.info(f"🔵 آموزش مدل {model_name} ...")
+            model_obj.fit(self.x_train, self.y_train)
+
+            logging.info(f"🔵 پیش‌بینی مدل {model_name} روی داده تست ...")
+            y_pred = model_obj.predict(self.x_test)
+
+            y_prob = None
+            try:
+                prob_mat = model_obj.predict_proba(self.x_test)
+                y_prob = prob_mat[:, 1]
+            except Exception:
+                y_prob = None
+
+            metrics = self._compute_metrics(
+                y_true=self.y_test.values,
+                y_pred=y_pred,
+                y_prob=y_prob,
+                cost_matrix=self.cost_matrix
+            )
+            metrics["ModelName"] = model_name
+            results_list.append(metrics)
+
+        df_results = pd.DataFrame(results_list)
+        df_results.sort_values(by="BalancedAccuracy", ascending=False, inplace=True)
+        self.comparison_table = df_results.reset_index(drop=True)
+        logging.info("✅ مقایسه مدل‌های رقیب پایان یافت.")
+        return self.comparison_table
+
+    def add_proposed_method_results(self, proposed_method_metrics: dict):
+        """
+        افزودن نتایج روش پیشنهادی به جدول مقایسه.
+        proposed_method_metrics باید دیکشنری با کلیدهای:
+        ModelName, TP, TN, FP, FN, BalancedAccuracy, Precision, Recall, F1, GM, AUC, TotalCost
+        باشد.
+        """
+        self.comparison_table = pd.concat(
+            [self.comparison_table, pd.DataFrame([proposed_method_metrics])],
+            ignore_index=True
+        )
+        self.comparison_table.sort_values(by="BalancedAccuracy", ascending=False, inplace=True)
+        self.comparison_table.reset_index(drop=True, inplace=True)
+        logging.info("🔵 نتایج روش پیشنهادی هم به جدول مقایسه اضافه شد.")
+
+    def show_final_comparison(self):
+        """
+        نمایش جدول نهایی مقایسه در لاگ و بازگرداندن آن.
+        تنظیمات پانداز به گونه‌ای تغییر می‌کند که همه ستون‌ها بدون ellipsis نمایش داده شوند.
+        """
+        logging.info("🔸 جدول مقایسه مدل‌ها:")
+        logging.warning("\n" + str(self.comparison_table))
+        return self.comparison_table
 
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
@@ -1069,4 +1281,20 @@ if __name__ == "__main__":
     logging.info("🔹 نتایج نهایی مدل:")
     for k, v in results.items():
         logging.info(f"  {k}: {v}")
+
+    comparator = ParsianMethodComparison(
+        x_train=x_train,
+        y_train=y_train,
+        x_test=x_test,
+        y_test=y_test,
+        cost_matrix=all_costs,  # اگر می‌خواهید هزینه هم محاسبه شود
+        model_comparisons=None  # اگر None بگذارید، چند مدل پایه به صورت پیش‌فرض دارد
+    )
+    comparison_df = comparator.run_comparison()
+    logging.error("\nنتایج مدل‌های رقیب:\n" + str(comparison_df))
+
+    comparator.add_proposed_method_results(proposed_method_metrics=results)
+
+    final_comparison = comparator.show_final_comparison()
+    logging.info("🔹 گام نهم (مقایسه با سایر روش‌ها) با موفقیت انجام شد.")
 
