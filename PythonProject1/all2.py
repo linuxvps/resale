@@ -13,18 +13,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 Base = declarative_base()
 protected_columns = ['approval_amount', 'interest_amount']
 
-formatter = ColoredFormatter(
-    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
-    datefmt=None,
-    reset=True,
-    log_colors={
-        'DEBUG': 'cyan',
-        'INFO': 'white',
-        'WARNING': 'yellow',
-        'ERROR': 'red',
-        'CRITICAL': 'bold_red',
-    }
-)
+formatter = ColoredFormatter("%(log_color)s%(asctime)s - %(levelname)s - %(message)s", datefmt=None, reset=True,
+    log_colors={'DEBUG': 'cyan', 'INFO': 'white', 'WARNING': 'yellow', 'ERROR': 'red', 'CRITICAL': 'bold_red', })
 
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
@@ -141,14 +131,7 @@ class ParsianDefaultProbabilityModel:
     - محاسبه احتمال نکول برای داده‌های آزمون
     """
 
-    def __init__(
-        self,
-        model_type="lightgbm",
-        n_estimators=100,
-        learning_rate=0.05,
-        random_state=42,
-        **kwargs
-    ):
+    def __init__(self, model_type="lightgbm", n_estimators=100, learning_rate=0.05, random_state=42, **kwargs):
         """
         پارامترها:
           - model_type: نوع مدل (lightgbm, xgboost یا هر مدل دیگری)
@@ -173,12 +156,8 @@ class ParsianDefaultProbabilityModel:
         """
         if self.model_type.lower() == "lightgbm":
             logging.info("🔵 در حال آموزش مدل LightGBM...")
-            self.model = LGBMClassifier(
-                n_estimators=self.n_estimators,
-                learning_rate=self.learning_rate,
-                random_state=self.random_state,
-                **self.kwargs
-            )
+            self.model = LGBMClassifier(n_estimators=self.n_estimators, learning_rate=self.learning_rate,
+                random_state=self.random_state, **self.kwargs)
         else:
             raise ValueError("فعلاً فقط مدل lightgbm پشتیبانی می‌شود (برای مثال).")
 
@@ -300,18 +279,9 @@ class ParsianPreprocessingManager:
     یک کلاس جامع برای گام اول (Preprocessing) از pseudocodeorg.
     """
 
-    def __init__(
-            self,
-            repository,
-            limit_records=10000,
-            label_column="status",
-            imputation_strategy="mean",
-            need_2_remove_highly_correlated_features=False,
-            correlation_threshold=0.9,
-            do_balance=True,
-            test_size=0.2,
-            random_state=42
-    ):
+    def __init__(self, repository, limit_records=10000, label_column="status", imputation_strategy="mean",
+            need_2_remove_highly_correlated_features=False, correlation_threshold=0.9, do_balance=True, test_size=0.2,
+            random_state=42):
         self.repository = repository
         self.limit_records = limit_records
         self.label_column = label_column
@@ -367,11 +337,8 @@ class ParsianPreprocessingManager:
 
         # حذف ویژگی‌های با همبستگی بالا
         if self.need_2_remove_highly_correlated_features:
-            df = self.preprocessor.remove_highly_correlated_features(
-                df,
-                threshold=self.correlation_threshold,
-                class_column=self.label_column
-            )
+            df = self.preprocessor.remove_highly_correlated_features(df, threshold=self.correlation_threshold,
+                class_column=self.label_column)
 
         # ایمپیوت
         df_imputed = pd.DataFrame(self.preprocessor.imputer.fit_transform(df), columns=df.columns)
@@ -381,12 +348,8 @@ class ParsianPreprocessingManager:
         y = df_imputed[self.label_column]
 
         # تقسیم آموزش/آزمون
-        x_train, x_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=self.test_size,
-            random_state=self.random_state
-        )
+        x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=self.test_size,
+            random_state=self.random_state)
 
         # انتخاب ویژگی
         x_train_selected = self.preprocessor.select_features(x_train, y_train)
@@ -473,12 +436,7 @@ class ParsianCostMatrix:
             # cost_bp = ...
             # cost_bn = ...
 
-            self.cost_matrix.append({
-                "PP": cost_pp,
-                "NN": cost_nn,
-                "PN": cost_pn,
-                "NP": cost_np
-                # "BP": cost_bp,
+            self.cost_matrix.append({"PP": cost_pp, "NN": cost_nn, "PN": cost_pn, "NP": cost_np# "BP": cost_bp,
                 # "BN": cost_bn
             })
 
@@ -523,15 +481,8 @@ class ParsianThresholdNSGA2:
       - n_gen: تعداد نسل (iteration) برای NSGA2
     """
 
-    def __init__(
-            self,
-            probabilities_test: np.ndarray,
-            cost_matrix: list,
-            true_labels: np.ndarray,
-            pop_size=50,
-            n_gen=100,
-            step_bnd=False
-    ):
+    def __init__(self, probabilities_test: np.ndarray, cost_matrix: list, true_labels: np.ndarray, pop_size=50,
+            n_gen=100, step_bnd=False):
         """
         پارامترها:
          - step_bnd: اگر True باشد، objective دوم را تعداد نمونه‌های BND در نظر می‌گیریم
@@ -596,22 +547,13 @@ class ParsianThresholdNSGA2:
         xl=[0,0], xu=[1,1] => alpha,beta ∈ [0,1]
         """
 
-        def __init__(
-                self,
-                outer,
-        ):
+        def __init__(self, outer, ):
             """
             - outer: یک اشاره به کلاس بیرونی ParsianThresholdNSGA2
                      تا بتوانیم از داده‌های probabilities_test و ... استفاده کنیم.
             """
-            super().__init__(
-                n_var=2,
-                n_obj=2,
-                n_constr=1,
-                xl=np.array([0.0, 0.0]),
-                xu=np.array([1.0, 1.0]),
-                type_var=np.double
-            )
+            super().__init__(n_var=2, n_obj=2, n_constr=1, xl=np.array([0.0, 0.0]), xu=np.array([1.0, 1.0]),
+                type_var=np.double)
             self.outer = outer  # ارجاع به کلاس بیرونی
 
         def _evaluate(self, X, out, *args, **kwargs):
@@ -663,13 +605,7 @@ class ParsianThresholdNSGA2:
         algo = NSGA2(pop_size=self.pop_size)
 
         # اجرای بهینه‌سازی
-        res = minimize(
-            self.problem_instance,
-            algo,
-            ("n_gen", self.n_gen),
-            seed=42,
-            verbose=False
-        )
+        res = minimize(self.problem_instance, algo, ("n_gen", self.n_gen), seed=42, verbose=False)
 
         self.front_costs = res.F  # هدف‌های راه‌حل‌های پارتو
         self.best_solutions = res.X  # خود راه‌حل‌ها (alpha,beta) در پارتو
@@ -762,6 +698,7 @@ class ParsianThreeWayDecision:
         unique, counts = np.unique(self.decisions, return_counts=True)
         return dict(zip(unique, counts))
 
+
 ###########################################
 # گام ششم: تصمیم‌گیری نهایی روی نمونه‌های BND
 #          (مثلاً با استکینگ یا مدل کمکی دیگر)
@@ -770,18 +707,14 @@ from sklearn.ensemble import StackingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 
+
 class ParsianBNDResolver:
     """
     این کلاس نمونه‌هایی را که در گام پنجم در ناحیه BND واقع شده‌اند،
     شناسایی و با یک مدل اضافی (مثلاً استکینگ) تصمیم قطعی (POS یا NEG) می‌گیرد.
     """
 
-    def __init__(
-        self,
-        x_train_all: pd.DataFrame,
-        y_train_all: pd.Series,
-        model_type="stacking"
-    ):
+    def __init__(self, x_train_all: pd.DataFrame, y_train_all: pd.Series, model_type="stacking"):
         """
         پارامترها:
           - x_train_all, y_train_all: داده‌های آموزش اصلی (یا داده‌های مرزی خاص؟)
@@ -800,17 +733,11 @@ class ParsianBNDResolver:
         """
         if self.model_type.lower() == "stacking":
             # چندین مدل پایه + متا
-            base_estimators = [
-                ("rf", RandomForestClassifier(n_estimators=50, random_state=42)),
-                ("xgb", XGBClassifier(eval_metric="logloss", random_state=42))
-            ]
+            base_estimators = [("rf", RandomForestClassifier(n_estimators=50, random_state=42)),
+                ("xgb", XGBClassifier(eval_metric="logloss", random_state=42))]
             meta_estimator = LogisticRegression(max_iter=1000, random_state=42)
-            self.classifier = StackingClassifier(
-                estimators=base_estimators,
-                final_estimator=meta_estimator,
-                cv=5,
-                n_jobs=-1
-            )
+            self.classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_estimator, cv=5,
+                n_jobs=-1)
         else:
             # می‌توانید روش‌های دیگر را اضافه کنید
             raise ValueError("فقط مدل 'stacking' پیاده شده است.")
@@ -819,11 +746,7 @@ class ParsianBNDResolver:
         self.classifier.fit(self.x_train_all, self.y_train_all)
         logging.info("✅ آموزش مدل BNDResolver کامل شد.")
 
-    def resolve_bnd_samples(
-        self,
-        x_test: pd.DataFrame,
-        decisions_final: np.ndarray
-    ):
+    def resolve_bnd_samples(self, x_test: pd.DataFrame, decisions_final: np.ndarray):
         """
         پارامترها:
          - x_test: داده‌های تست کامل
@@ -849,11 +772,13 @@ class ParsianBNDResolver:
             decisions_updated[idx] = pred  # pred=0 => NEG, pred=1 => POS
         return decisions_updated
 
+
 ###########################################
 # گام هفتم: ارزیابی نهایی و گزارش (Final Evaluation)
 ###########################################
 import numpy as np
-from sklearn.metrics import confusion_matrix, roc_auc_score, precision_score, recall_score, f1_score
+from sklearn.metrics import roc_auc_score
+
 
 class ParsianFinalEvaluator:
     """
@@ -861,13 +786,8 @@ class ParsianFinalEvaluator:
     مقایسه می‌کنیم و معیارهای عملکرد را محاسبه و گزارش می‌دهیم.
     """
 
-    def __init__(
-        self,
-        true_labels: np.ndarray,
-        final_decisions: np.ndarray,
-        probabilities_test: np.ndarray = None,
-        cost_matrix: list = None
-    ):
+    def __init__(self, true_labels: np.ndarray, final_decisions: np.ndarray, probabilities_test: np.ndarray = None,
+            cost_matrix: list = None):
         """
         پارامترها:
           - true_labels: آرایه برچسب‌های واقعی تست (۰ یا ۱)
@@ -900,8 +820,8 @@ class ParsianFinalEvaluator:
 
         # محاسبه Balanced Accuracy
         # = 0.5 * (TP/(TP+FN) + TN/(TN+FP))
-        sensitivity = TP / (TP + FN) if (TP+FN) != 0 else 0
-        specificity = TN / (TN + FP) if (TN+FP) != 0 else 0
+        sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
+        specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
         b_acc = 0.5 * (sensitivity + specificity)
 
         # Precision, Recall, F1
@@ -949,25 +869,15 @@ class ParsianFinalEvaluator:
         # محاسبه GM به صورت sqrt((TP/(TP+FN)) * (TN/(TN+FP)))
         gm = np.sqrt((TP / (TP + FN)) * (TN / (TN + FP))) if (TP + FN) != 0 and (TN + FP) != 0 else 0
 
-        metrics_dict = {
-            "ModelName": "Proposed-3WD",
-            "TN": TN,
-            "FP": FP,
-            "FN": FN,
-            "TP": TP,
-            "BalancedAccuracy": b_acc,
-            "Precision": precision,
-            "Recall": recall,
-            "F1": f1,
-            "GM": gm,
-            "AUC": auc_val,
-            "TotalCost": total_cost
-        }
+        metrics_dict = {"ModelName": "Proposed-3WD", "TN": TN, "FP": FP, "FN": FN, "TP": TP, "BalancedAccuracy": b_acc,
+            "Precision": precision, "Recall": recall, "F1": f1, "GM": gm, "AUC": auc_val, "TotalCost": total_cost}
         return metrics_dict
+
 
 from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 from math import sqrt
 import logging
+
 
 class ParsianMethodComparison:
     """
@@ -984,15 +894,8 @@ class ParsianMethodComparison:
       - TotalCost (در صورت وجود cost_matrix)
     """
 
-    def __init__(
-            self,
-            x_train: pd.DataFrame,
-            y_train: pd.Series,
-            x_test: pd.DataFrame,
-            y_test: pd.Series,
-            cost_matrix: list = None,
-            model_comparisons: dict = None
-    ):
+    def __init__(self, x_train: pd.DataFrame, y_train: pd.Series, x_test: pd.DataFrame, y_test: pd.Series,
+            cost_matrix: list = None, model_comparisons: dict = None):
         """
         پارامترها:
          - x_train, y_train: داده‌های آموزش
@@ -1018,27 +921,16 @@ class ParsianMethodComparison:
             from sklearn.ensemble import StackingClassifier
             from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-            self.model_comparisons = {
-                "Bayes": GaussianNB(),
-                "KNN": KNeighborsClassifier(),
-                "LR": LogisticRegression(max_iter=10_000),
-                "NN": MLPClassifier(max_iter=300),
-                "AdaBoost": AdaBoostClassifier(algorithm="SAMME"),
-                "ERT": ExtraTreesClassifier(),
-                "GBDT": GradientBoostingClassifier(),
-                "LGBM": LGBMClassifier(verbose=-1),
-                "RF": RandomForestClassifier(),
-                "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
-                "Stacking": StackingClassifier(estimators=[
-                    ('lda', LinearDiscriminantAnalysis()),
-                    ('knn', KNeighborsClassifier())
-                ], final_estimator=RandomForestClassifier()),
-                "Bagging": BaggingClassifier(
-                    estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
-                    n_estimators=10,
-                    random_state=42
-                )
-            }
+            self.model_comparisons = {"Bayes": GaussianNB(), "KNN": KNeighborsClassifier(),
+                "LR": LogisticRegression(max_iter=10_000), "NN": MLPClassifier(max_iter=300),
+                "AdaBoost": AdaBoostClassifier(algorithm="SAMME"), "ERT": ExtraTreesClassifier(),
+                "GBDT": GradientBoostingClassifier(), "LGBM": LGBMClassifier(verbose=-1),
+                "RF": RandomForestClassifier(), "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
+                "Stacking": StackingClassifier(
+                    estimators=[('lda', LinearDiscriminantAnalysis()), ('knn', KNeighborsClassifier())],
+                    final_estimator=RandomForestClassifier()),
+                "Bagging": BaggingClassifier(estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
+                    n_estimators=10, random_state=42)}
         else:
             self.model_comparisons = model_comparisons
 
@@ -1052,10 +944,7 @@ class ParsianMethodComparison:
         TN, FP, FN, TP = cm.ravel()
 
         # Balanced Accuracy
-        b_acc = 0.5 * (
-            (TP / (TP + FN) if (TP + FN) > 0 else 0) +
-            (TN / (TN + FP) if (TN + FP) > 0 else 0)
-        )
+        b_acc = 0.5 * ((TP / (TP + FN) if (TP + FN) > 0 else 0) + (TN / (TN + FP) if (TN + FP) > 0 else 0))
 
         # Precision و Recall
         precision = precision_score(y_true, y_pred, zero_division=0)
@@ -1096,19 +985,8 @@ class ParsianMethodComparison:
                     tc += costs["NN"]
             total_cost = tc
 
-        return {
-            "TP": TP,
-            "TN": TN,
-            "FP": FP,
-            "FN": FN,
-            "BalancedAccuracy": b_acc,
-            "Precision": precision,
-            "Recall": recall,
-            "F1": f1,
-            "GM": gm,
-            "AUC": auc_val,
-            "TotalCost": total_cost
-        }
+        return {"TP": TP, "TN": TN, "FP": FP, "FN": FN, "BalancedAccuracy": b_acc, "Precision": precision,
+            "Recall": recall, "F1": f1, "GM": gm, "AUC": auc_val, "TotalCost": total_cost}
 
     def run_comparison(self):
         """
@@ -1135,12 +1013,8 @@ class ParsianMethodComparison:
             except Exception:
                 y_prob = None
 
-            metrics = self._compute_metrics(
-                y_true=self.y_test.values,
-                y_pred=y_pred,
-                y_prob=y_prob,
-                cost_matrix=self.cost_matrix
-            )
+            metrics = self._compute_metrics(y_true=self.y_test.values, y_pred=y_pred, y_prob=y_prob,
+                cost_matrix=self.cost_matrix)
             metrics["ModelName"] = model_name
             results_list.append(metrics)
 
@@ -1157,10 +1031,8 @@ class ParsianMethodComparison:
         ModelName, TP, TN, FP, FN, BalancedAccuracy, Precision, Recall, F1, GM, AUC, TotalCost
         باشد.
         """
-        self.comparison_table = pd.concat(
-            [self.comparison_table, pd.DataFrame([proposed_method_metrics])],
-            ignore_index=True
-        )
+        self.comparison_table = pd.concat([self.comparison_table, pd.DataFrame([proposed_method_metrics])],
+            ignore_index=True)
         self.comparison_table.sort_values(by="BalancedAccuracy", ascending=False, inplace=True)
         self.comparison_table.reset_index(drop=True, inplace=True)
         logging.info("🔵 نتایج روش پیشنهادی هم به جدول مقایسه اضافه شد.")
@@ -1174,6 +1046,7 @@ class ParsianMethodComparison:
         logging.warning("\n" + str(self.comparison_table))
         return self.comparison_table
 
+
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
 ###########################################
@@ -1186,17 +1059,9 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(
-        repository=repo,
-        limit_records=5000,
-        label_column="status",
-        imputation_strategy="mean",
-        need_2_remove_highly_correlated_features=False,
-        correlation_threshold=0.9,
-        do_balance=True,
-        test_size=0.2,
-        random_state=42
-    )
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=5000, label_column="status",
+        imputation_strategy="mean", need_2_remove_highly_correlated_features=False, correlation_threshold=0.9,
+        do_balance=True, test_size=0.2, random_state=42)
 
     x_train, y_train, x_test, y_test, original_df = prep_manager.step1_process_data()
     if x_train is None:
@@ -1204,12 +1069,8 @@ if __name__ == "__main__":
         exit(1)
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
-    default_model = ParsianDefaultProbabilityModel(
-        model_type="lightgbm",
-        n_estimators=100,
-        learning_rate=0.05,
-        random_state=42
-    )
+    default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
+        random_state=42)
     default_model.fit_model(x_train, y_train)
     probabilities_test = default_model.predict_default_probability(x_test)
 
@@ -1224,14 +1085,10 @@ if __name__ == "__main__":
 
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II
     from numpy import array
-    threshold_nsgaii = ParsianThresholdNSGA2(
-        probabilities_test=probabilities_test,
-        cost_matrix=all_costs,
+
+    threshold_nsgaii = ParsianThresholdNSGA2(probabilities_test=probabilities_test, cost_matrix=all_costs,
         true_labels=y_test.values,  # یا array(y_test)
-        pop_size=50,
-        n_gen=100,
-        step_bnd=False
-    )
+        pop_size=50, n_gen=100, step_bnd=False)
     threshold_nsgaii.optimize()
 
     solutions, objectives = threshold_nsgaii.get_pareto_front()
@@ -1240,7 +1097,6 @@ if __name__ == "__main__":
         alpha, beta = sol
         cost_val, boundary_val = objectives[i]
         logging.info(f"  alpha={alpha:.3f}, beta={beta:.3f} => cost={cost_val:.2f}, boundary={boundary_val:.3f}")
-
 
     # انتخاب راه‌حل نهایی از میان راه‌حل‌های پارتو بر اساس کمترین مقدار objective دوم (boundary_size)
     final_solution, final_objectives = threshold_nsgaii.get_final_solution()
@@ -1257,36 +1113,27 @@ if __name__ == "__main__":
                  f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
     # 6) گام ششم: تصمیم‌گیری روی BNDها
-    bnd_resolver = ParsianBNDResolver(
-        x_train_all=x_train,
-        y_train_all=y_train,
-        model_type="stacking"
-    )
+    bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="stacking")
     bnd_resolver.fit_bnd_model()
 
     # اعمال مدل استکینگ روی نمونه‌های مرزی
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
 
     logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
-    logging.info(f" count POS={np.sum(decisions_updated==1)}, NEG={np.sum(decisions_updated==0)}, BND={np.sum(decisions_updated==-1)}")
+    logging.info(
+        f" count POS={np.sum(decisions_updated == 1)}, NEG={np.sum(decisions_updated == 0)}, BND={np.sum(decisions_updated == -1)}")
 
     # 7) گام هفتم: Evaluation نهایی
-    final_eval = ParsianFinalEvaluator(
-        true_labels=y_test.values,
-        final_decisions=decisions_updated,
+    final_eval = ParsianFinalEvaluator(true_labels=y_test.values, final_decisions=decisions_updated,
         probabilities_test=probabilities_test,  # اگر AUC بخواهیم
-        cost_matrix=all_costs                  # اگر هزینه بخواهیم
+        cost_matrix=all_costs  # اگر هزینه بخواهیم
     )
     results = final_eval.evaluate_metrics()
     logging.info("🔹 نتایج نهایی مدل:")
     for k, v in results.items():
         logging.info(f"  {k}: {v}")
 
-    comparator = ParsianMethodComparison(
-        x_train=x_train,
-        y_train=y_train,
-        x_test=x_test,
-        y_test=y_test,
+    comparator = ParsianMethodComparison(x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test,
         cost_matrix=all_costs,  # اگر می‌خواهید هزینه هم محاسبه شود
         model_comparisons=None  # اگر None بگذارید، چند مدل پایه به صورت پیش‌فرض دارد
     )
@@ -1297,4 +1144,3 @@ if __name__ == "__main__":
 
     final_comparison = comparator.show_final_comparison()
     logging.info("🔹 گام نهم (مقایسه با سایر روش‌ها) با موفقیت انجام شد.")
-
