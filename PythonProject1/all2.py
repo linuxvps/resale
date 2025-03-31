@@ -94,6 +94,42 @@ class Plot:
         plt.grid(axis='y', linestyle='--', alpha=0.6)
         plt.tight_layout()
         plt.show()
+    def plot_with_thresholds(self, probabilities: np.ndarray, alpha: float, beta: float,
+                             bins: int = 20, figsize: Tuple[int, int] = (10, 6)) -> None:
+        """
+        رسم نمودار احتمال‌ها با اضافه کردن خطوط آستانه alpha و beta.
+
+        :param probabilities: آرایه numpy شامل احتمال‌ها.
+        :param alpha: مقدار آلفا (آستانه مثبت).
+        :param beta: مقدار بتا (آستانه منفی).
+        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 20).
+        :param figsize: اندازه شکل نمودار (پیش‌فرض (10, 6)).
+        """
+        plt.figure(figsize=figsize)
+
+        # رسم هیستوگرام
+        n, bins_array, patches = plt.hist(probabilities, bins=bins, edgecolor='black',
+                                          alpha=0.7, color='skyblue')
+
+        # محاسبه و نمایش خط میانگین
+        mean_val = np.mean(probabilities)
+        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2,
+                    label=f'Mean = {mean_val:.2f}')
+
+        # رسم خطوط alpha و beta
+        plt.axvline(alpha, color='green', linestyle='-', linewidth=2, label=f'Alpha (POS) = {alpha:.3f}')
+        plt.axvline(beta, color='orange', linestyle='-', linewidth=2, label=f'Beta (NEG) = {beta:.3f}')
+
+        # افزودن جزئیات به نمودار
+        plt.title("Distribution of Default Probabilities with Thresholds", fontsize=16)
+        plt.xlabel("Probability", fontsize=14)
+        plt.ylabel("Frequency", fontsize=14)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.legend(fontsize=12)
+        plt.tight_layout()
+        plt.show()
 
 
 class ParsianLoan(Base):
@@ -1177,6 +1213,10 @@ if __name__ == "__main__":
     best_alpha, best_beta = final_solution[0], final_solution[1]
     logging.warning(
         f"🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
+
+    visualizer = Plot()
+    visualizer.plot_with_thresholds(probabilities_test, alpha=0.394, beta=0.165)
+
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
 
     threeway = ParsianThreeWayDecision(probabilities_test, best_alpha, best_beta)
