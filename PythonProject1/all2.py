@@ -35,7 +35,7 @@ import numpy as np
 from typing import Tuple
 
 
-class ProbabilityVisualizer:
+class Plot:
     """
     یک کلاس عمومی برای بصری‌سازی توزیع احتمال‌ها.
     """
@@ -1120,7 +1120,7 @@ if __name__ == "__main__":
     default_model.fit_model(x_train, y_train)
     probabilities_test = default_model.predict_default_probability(x_test)
 
-    visualizer = ProbabilityVisualizer()
+    visualizer = Plot()
     visualizer.visualize_distribution(probabilities_test)
 
     logging.info(f"احتمال نکول برای اولین 5 نمونه: {probabilities_test[:5]}")
