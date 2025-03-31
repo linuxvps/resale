@@ -142,12 +142,12 @@ class Plot:
         feature_importance = feature_importance.sort_values(by='Importance', ascending=False).head(top_n)
 
         plt.figure(figsize=(12, 8))
-        sns.barplot(x='Importance', y='Feature', data=feature_importance, palette='viridis')
+        sns.barplot(x='Importance', y='Feature', data=feature_importance, palette='viridis', hue='Feature', dodge=False)
         plt.title('Feature Importance (Top {})'.format(top_n), fontsize=16)
         plt.xlabel('Importance', fontsize=14)
         plt.ylabel('Features', fontsize=14)
+        plt.legend([],[], frameon=False)  # مخفی کردن legend اضافی
         plt.show()
-
 
 
 class ParsianLoan(Base):
@@ -210,6 +210,7 @@ class ParsianLoan(Base):
     def __repr__(self):
         return f"<ParsianLoan(id={self.id}, branch_code={self.branch_code}, client_id={self.client_id})>"
 
+from sqlalchemy.orm import defer
 
 class LoanRepository:
     """
@@ -228,7 +229,7 @@ class LoanRepository:
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
-        loans = self.session.query(ParsianLoan).limit(limit).all()
+        loans = self.session.query(ParsianLoan).options(defer(ParsianLoan.contract), defer(ParsianLoan.id)).limit(limit).all()
         if not loans:
             logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
             return pd.DataFrame()
@@ -1188,7 +1189,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=500_000, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=10_000, label_column="status",
         imputation_strategy="mean", need_2_remove_highly_correlated_features=False, correlation_threshold=0.9,
         do_balance=True, test_size=0.2, random_state=42)
 
@@ -1237,7 +1238,7 @@ if __name__ == "__main__":
         f"🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
 
     visualizer = Plot()
-    visualizer.plot_with_thresholds(probabilities_test, alpha=0.394, beta=0.165)
+    visualizer.plot_with_thresholds(probabilities_test, alpha=best_alpha, beta=best_beta)
 
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
 
