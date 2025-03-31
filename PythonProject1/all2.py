@@ -130,6 +130,24 @@ class Plot:
         plt.legend(fontsize=12)
         plt.tight_layout()
         plt.show()
+    def plot_feature_importance(self, model, feature_names, top_n=20):
+        """
+        رسم نمودار اهمیت ویژگی‌ها بر اساس مدل LightGBM
+        :param model: مدل آموزش‌دیده (LightGBM)
+        :param feature_names: نام ویژگی‌ها (ستون‌های دیتافریم X)
+        :param top_n: تعداد ویژگی‌هایی که نمایش داده می‌شوند (پیش‌فرض: 20)
+        """
+        importance = model.feature_importances_
+        feature_importance = pd.DataFrame({'Feature': feature_names, 'Importance': importance})
+        feature_importance = feature_importance.sort_values(by='Importance', ascending=False).head(top_n)
+
+        plt.figure(figsize=(12, 8))
+        sns.barplot(x='Importance', y='Feature', data=feature_importance, palette='viridis')
+        plt.title('Feature Importance (Top {})'.format(top_n), fontsize=16)
+        plt.xlabel('Importance', fontsize=14)
+        plt.ylabel('Features', fontsize=14)
+        plt.show()
+
 
 
 class ParsianLoan(Base):
@@ -266,6 +284,8 @@ class ParsianDefaultProbabilityModel:
             raise ValueError("فعلاً فقط مدل lightgbm پشتیبانی می‌شود (برای مثال).")
 
         self.model.fit(x_train, y_train)
+        Plot().plot_feature_importance(default_model.model, x_train.columns)
+
         logging.info("✅ آموزش مدل به پایان رسید.")
 
     def predict_default_probability(self, x_test):
@@ -317,8 +337,10 @@ class LoanPreprocessor:
         if label_column not in df.columns:
             raise ValueError(f"ستون {label_column} در داده وجود ندارد.")
 
+        logger.warning(df[label_column].value_counts())
+
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
-        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته"}
+        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته","سررسيد شده"}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
         # لاگ گرفتن از توزیع داده‌ها
         label_counts = df[label_column].value_counts()
@@ -1166,7 +1188,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=5000, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=500_000, label_column="status",
         imputation_strategy="mean", need_2_remove_highly_correlated_features=False, correlation_threshold=0.9,
         do_balance=True, test_size=0.2, random_state=42)
 
