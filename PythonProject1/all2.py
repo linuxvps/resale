@@ -33,7 +33,7 @@ pd.set_option('display.float_format', lambda x: '%.2f' % x)
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Tuple
-
+import seaborn as sns
 
 class Plot:
     """
@@ -72,6 +72,26 @@ class Plot:
         plt.yticks(fontsize=12)
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend(fontsize=12)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_label_count(self, label_counts: pd.Series) -> None:
+        plt.figure(figsize=(10, 6))
+
+        # تبدیل ایندکس‌ها به عددی
+        label_counts.index = label_counts.index.astype(int)
+
+        # تبدیل سری به DataFrame برای استفاده از hue
+        label_df = pd.DataFrame({'Labels': label_counts.index, 'Frequency': label_counts.values})
+
+        sns.barplot(x='Labels', y='Frequency', data=label_df, hue='Labels', dodge=False,
+                    palette=['#4CAF50', '#FF6F61'], legend=False)
+
+        plt.title('Label Distribution After Conversion', fontsize=18)
+        plt.xlabel('Labels (0: Non-Default, 1: Default)', fontsize=14)
+        plt.ylabel('Frequency', fontsize=14)
+        plt.xticks(ticks=[0, 1], labels=['Non-Default (0)', 'Default (1)'])
+        plt.grid(axis='y', linestyle='--', alpha=0.6)
         plt.tight_layout()
         plt.show()
 
@@ -264,7 +284,11 @@ class LoanPreprocessor:
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
         default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته"}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
-        logging.warning(df[label_column].value_counts().to_string())
+        # لاگ گرفتن از توزیع داده‌ها
+        label_counts = df[label_column].value_counts()
+        logging.warning(label_counts.to_string())
+
+        Plot().plot_label_count(label_counts)
         return df
 
     def convert_dataframe_columns(self, df):
