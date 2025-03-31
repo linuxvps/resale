@@ -43,8 +43,8 @@ class Plot:
     def __init__(self) -> None:
         pass
 
-    def visualize_distribution(self, probabilities: np.ndarray, bins: int = 20,
-                               figsize: Tuple[int, int] = (10, 6)) -> None:
+    def plot1(self, probabilities: np.ndarray, bins: int = 20,
+              figsize: Tuple[int, int] = (10, 6)) -> None:
         """
         نمودار هیستوگرام توزیع احتمال‌ها را بر اساس آرایه ورودی رسم می‌کند.
         با افزودن جزئیات مانند خط میانگین، برچسب‌های دقیق محور و تنظیمات grid.
@@ -1121,7 +1121,7 @@ if __name__ == "__main__":
     probabilities_test = default_model.predict_default_probability(x_test)
 
     visualizer = Plot()
-    visualizer.visualize_distribution(probabilities_test)
+    visualizer.plot1(probabilities_test)
 
     logging.info(f"احتمال نکول برای اولین 5 نمونه: {probabilities_test[:5]}")
     logging.info("گام دوم (برآورد احتمال نکول) با موفقیت انجام شد.")
