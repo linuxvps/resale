@@ -264,6 +264,7 @@ class LoanPreprocessor:
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
         default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته"}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
+        logging.warning(df[label_column].value_counts().to_string())
         return df
 
     def convert_dataframe_columns(self, df):
