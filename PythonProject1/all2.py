@@ -42,15 +42,16 @@ class Plot:
     def __init__(self) -> None:
         pass
 
-    def plot1(self, probabilities: np.ndarray, bins: int = 20,
-              figsize: Tuple[int, int] = (10, 6)) -> None:
+    def plot1(self, probabilities: np.ndarray, bins: int = 100,
+              figsize: Tuple[int, int] = (10, 6), xlim: Tuple[float, float] = None) -> None:
         """
         نمودار هیستوگرام توزیع احتمال‌ها را بر اساس آرایه ورودی رسم می‌کند.
         با افزودن جزئیات مانند خط میانگین، برچسب‌های دقیق محور و تنظیمات grid.
 
         :param probabilities: آرایه numpy شامل احتمال‌ها.
-        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 20).
+        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 100).
         :param figsize: اندازه شکل نمودار (پیش‌فرض (10, 6)).
+        :param xlim: محدوده محور افقی به صورت (min, max). اگر None باشد، به صورت خودکار تنظیم می‌شود.
         """
         plt.figure(figsize=figsize)
 
@@ -63,6 +64,10 @@ class Plot:
         plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2,
                     label=f'Mean = {mean_val:.2f}')
 
+        # تنظیم محدوده محور افقی در صورت نیاز
+        if xlim is not None:
+            plt.xlim(xlim)
+
         # افزودن جزئیات به نمودار
         plt.title("Distribution of Default Probabilities", fontsize=16)
         plt.xlabel("Probability", fontsize=14)
@@ -73,6 +78,7 @@ class Plot:
         plt.legend(fontsize=12)
         plt.tight_layout()
         plt.show()
+
 
     def plot_label_count(self, label_counts: pd.Series) -> None:
         plt.figure(figsize=(10, 6))
@@ -94,15 +100,16 @@ class Plot:
         plt.tight_layout()
         plt.show()
     def plot_with_thresholds(self, probabilities: np.ndarray, alpha: float, beta: float,
-                             bins: int = 20, figsize: Tuple[int, int] = (10, 6)) -> None:
+                             bins: int = 100, figsize: Tuple[int, int] = (12, 6), xlim: Tuple[float, float] = None) -> None:
         """
         رسم نمودار احتمال‌ها با اضافه کردن خطوط آستانه alpha و beta.
 
         :param probabilities: آرایه numpy شامل احتمال‌ها.
         :param alpha: مقدار آلفا (آستانه مثبت).
         :param beta: مقدار بتا (آستانه منفی).
-        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 20).
-        :param figsize: اندازه شکل نمودار (پیش‌فرض (10, 6)).
+        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 100).
+        :param figsize: اندازه شکل نمودار (پیش‌فرض (12, 6)).
+        :param xlim: محدوده محور افقی (مثلاً (0, 0.5) برای بزرگنمایی داده‌های نزدیک به صفر).
         """
         plt.figure(figsize=figsize)
 
@@ -116,8 +123,8 @@ class Plot:
                     label=f'Mean = {mean_val:.2f}')
 
         # رسم خطوط alpha و beta
-        plt.axvline(alpha, color='green', linestyle='-', linewidth=2, label=f'Alpha (POS) = {alpha:.3f}')
-        plt.axvline(beta, color='orange', linestyle='-', linewidth=2, label=f'Beta (NEG) = {beta:.3f}')
+        plt.axvline(alpha, color='green', linestyle='-', linewidth=3, label=f'Alpha (POS) = {alpha:.3f}')
+        plt.axvline(beta, color='orange', linestyle='-', linewidth=3, label=f'Beta (NEG) = {beta:.3f}')
 
         # افزودن جزئیات به نمودار
         plt.title("Distribution of Default Probabilities with Thresholds", fontsize=16)
@@ -127,8 +134,14 @@ class Plot:
         plt.yticks(fontsize=12)
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend(fontsize=12)
+
+        # تنظیم محدوده محور افقی
+        if xlim:
+            plt.xlim(xlim)
+
         plt.tight_layout()
         plt.show()
+
     def plot_feature_importance(self, model, feature_names, top_n=20):
         """
         رسم نمودار اهمیت ویژگی‌ها بر اساس مدل LightGBM
