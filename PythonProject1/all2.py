@@ -229,15 +229,21 @@ class LoanRepository:
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
-        loans = self.session.query(ParsianLoan).limit(limit).all()
+        # تعریف لیست ستون‌هایی که نمی‌خواهیم انتخاب بشن (مثلاً 'contract' و 'id')
+        excluded_columns = [ParsianLoan.contract.key,ParsianLoan.id.key]
+        # دریافت لیست تمام ستون‌های موجود در جدول
+        all_columns = [column.name for column in ParsianLoan.__table__.columns]
+        # انتخاب ستون‌هایی که در لیست excluded وجود ندارند
+        selected_columns = [col for col in all_columns if col not in excluded_columns]
+
+        # اجرای کوئری با انتخاب فقط ستون‌های مورد نظر
+        loans = self.session.query(*[getattr(ParsianLoan, col) for col in selected_columns]).limit(limit).all()
         if not loans:
             logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
             return pd.DataFrame()
 
-        columns = [c.name for c in ParsianLoan.__table__.columns]
-        data = {}
-        for col in columns:
-            data[col] = [getattr(loan, col) for loan in loans]
+        # تبدیل داده‌ها به DataFrame
+        data = {col: [getattr(loan, col) for loan in loans] for col in selected_columns}
         df = pd.DataFrame(data)
         logging.info(f"✅ {len(df)} رکورد از دیتابیس دریافت شد (parsian_loan).")
         return df
@@ -1189,7 +1195,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=100_000, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=10_000, label_column="status",
         imputation_strategy="mean", need_2_remove_highly_correlated_features=False, correlation_threshold=0.9,
         do_balance=True, test_size=0.2, random_state=42)
 
