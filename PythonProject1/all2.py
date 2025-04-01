@@ -8,6 +8,7 @@ from colorlog import ColoredFormatter
 # ------------------------------------------------------------
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sklearn.decomposition import PCA
 
 Base = declarative_base()
 protected_columns = ['approval_amount', 'interest_amount']
@@ -161,6 +162,30 @@ class Plot:
         plt.legend([],[], frameon=False)  # مخفی کردن legend اضافی
         plt.show()
 
+    def plot_pca(self, X: pd.DataFrame, n_components: int = 2):
+        """
+        اجرای PCA و نمایش درصد واریانس توضیح داده شده توسط مؤلفه‌ها
+        :param X: داده‌ها (به شکل DataFrame)
+        :param n_components: تعداد مؤلفه‌های اصلی برای نمایش
+        """
+        pca = PCA(n_components=n_components)
+        X_pca = pca.fit_transform(X)
+
+        explained_variance = pca.explained_variance_ratio_
+        cumulative_variance = explained_variance.cumsum()
+
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(1, n_components + 1), explained_variance * 100, alpha=0.5, align='center', label='Individual Explained Variance')
+        plt.step(range(1, n_components + 1), cumulative_variance * 100, where='mid', label='Cumulative Explained Variance')
+        plt.xlabel('Principal Components', fontsize=14)
+        plt.ylabel('Percentage of Variance Explained', fontsize=14)
+        plt.title('Explained Variance by Principal Components', fontsize=16)
+        plt.legend(loc='best')
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.show()
+
+        print(f"مقدار واریانس توضیح داده شده توسط مؤلفه‌ها: {explained_variance}")
+        print(f"واریانس تجمعی (Cumulative Variance): {cumulative_variance[-1]}")
 
 from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime, Date, String, CHAR, Float
 from datetime import datetime
@@ -1216,6 +1241,9 @@ if __name__ == "__main__":
     if x_train is None:
         logging.error("گام اول ناموفق بود.")
         exit(1)
+
+    visualizer = Plot()
+    visualizer.plot_pca(x_train, n_components=10)
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
