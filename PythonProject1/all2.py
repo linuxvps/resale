@@ -1,13 +1,12 @@
 import logging
 import os
-from datetime import datetime
 
 import pandas as pd
 from colorlog import ColoredFormatter
 # ------------------------------------------------------------
 # بخش مربوط به SQLAlchemy برای اتصال به دیتابیس و تعریف انتیتی
 # ------------------------------------------------------------
-from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Date, DateTime, Numeric, Float
+from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -150,67 +149,68 @@ class Plot:
         plt.show()
 
 
+from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime, Date, String, CHAR, Float
+from datetime import datetime
+
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
 
-    # ستون‌ها مطابق دیتابیس parsian_loan
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    insert_sysdate = Column(DateTime, nullable=False, default=datetime.utcnow)
-    branch_code = Column(Integer, nullable=False)
-    branchname = Column(String(100), nullable=True)
-    client_id = Column(Integer, nullable=True)
-    loan_file_numberr = Column(BigInteger, nullable=True)
-    sit_flag = Column(String(1), nullable=True)
-    interest_rate = Column(Numeric(19, 2), nullable=True)
-    total_repayment_up_to_now = Column(Numeric(28, 8), nullable=True)
-    commission_amount_remain = Column(Numeric(28, 8), nullable=True)
-    charge = Column(Numeric(28, 8), nullable=True)
-    discount = Column(Numeric(28, 8), nullable=True)
-    advance_pay_to_total_cash = Column(Numeric(28, 8), nullable=True)
-    advance_pay_to_remain_non_cash = Column(Numeric(28, 8), nullable=True)
-    is_installment = Column(String(1), nullable=True)
-    interest_sum = Column(Numeric(28, 8), nullable=True)
-    installment_number_remain = Column(Integer, nullable=True)
-    receivable_installment_number = Column(Integer, nullable=True)
-    first_passed = Column(Date, nullable=True)
-    total_payment_up_to_now = Column(Numeric(28, 8), nullable=True)
-    finalized_loan_amount = Column(Numeric(28, 8), nullable=True)
-    penalty = Column(Numeric(28, 8), nullable=True)
-    first_payment_date_in_du = Column(Date, nullable=True)
-    principal_sum = Column(Numeric(28, 8), nullable=True)
     advance_pay = Column(Numeric(28, 8), nullable=True)
-    sit_duration = Column(Integer, nullable=True)
-    sit_duration_day = Column(Integer, nullable=True)
-    sit_distribute_phases = Column(Integer, nullable=True)
-    sit_fast_receive_percent = Column(Float, nullable=True)
-    frequency = Column(Integer, nullable=True)
+    advance_pay_to_remain_non_cash = Column(Numeric(28, 8), nullable=True)
+    advance_pay_to_total_cash = Column(Numeric(28, 8), nullable=True)
+    approval_amount = Column(Numeric(28, 8), nullable=True)
+    bank_share_cash_amount = Column(Numeric(28, 8), nullable=True)
+    bank_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
+    branch_code = Column(Integer, nullable=False)
+    branchname = Column(String(100, collation='utf8mb4_unicode_ci'), nullable=True)
+    charge = Column(Numeric(28, 8), nullable=True)
+    loan_file_numberr = Column(BigInteger, nullable=True)
+    client_id = Column(Integer, nullable=True)
+    commission_amount_remain = Column(Numeric(28, 8), nullable=True)
+    contract = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
+    create_date = Column(Date, nullable=True)
     customer_obligation_amount = Column(Numeric(28, 8), nullable=True)
     customer_share_cash_amount = Column(Numeric(28, 8), nullable=True)
     customer_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
-    bank_share_cash_amount = Column(Numeric(28, 8), nullable=True)
-    bank_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
+    discount = Column(Numeric(28, 8), nullable=True)
+    due_date = Column(Date, nullable=True)
+    finalized_loan_amount = Column(Numeric(28, 8), nullable=True)
     first_over_due = Column(Date, nullable=True)
+    first_passed = Column(Date, nullable=True)
+    first_payment_date_in_du = Column(Date, nullable=True)
+    frequency = Column(Integer, nullable=True)
+    inc_commission_amount = Column(Numeric(28, 8), nullable=True)
+    insert_sysdate = Column(DateTime(6), nullable=False, default=datetime.utcnow)
+    installment_number_remain = Column(Integer, nullable=True)
+    interest_amount = Column(Numeric(28, 8), nullable=True)
+    interest_rate = Column(Numeric(19, 2), nullable=True)
+    interest_sum = Column(Numeric(28, 8), nullable=True)
+    is_installment = Column(CHAR, nullable=True)
     loan_duration_day = Column(Integer, nullable=True)
     loan_file_number = Column(BigInteger, nullable=True)
-    create_date = Column(Date, nullable=True)
-    long_title = Column(String(255), nullable=True)
-    status = Column(String(255), nullable=True)
-    contract = Column(String(255), nullable=True)
-    approval_amount = Column(Numeric(28, 8), nullable=True)
-    title = Column(String(255), nullable=True)
-    inc_commission_amount = Column(Numeric(28, 8), nullable=True)
-    interest_amount = Column(Numeric(28, 8), nullable=True)
+    long_title = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
     obligation_penalty = Column(Numeric(28, 8), nullable=True)
     passed_date = Column(Date, nullable=True)
+    penalty = Column(Numeric(28, 8), nullable=True)
     penalty_interest = Column(Numeric(28, 8), nullable=True)
+    principal_sum = Column(Numeric(28, 8), nullable=True)
+    receivable_installment_number = Column(Integer, nullable=True)
+    sit_distribute_phases = Column(Integer, nullable=True)
+    sit_duration = Column(Integer, nullable=True)
+    sit_duration_day = Column(Integer, nullable=True)
+    sit_fast_receive_percent = Column(Float, nullable=True)
+    sit_flag = Column(CHAR, nullable=True)
+    status = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
+    title = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
     to_due_date = Column(Numeric(28, 8), nullable=True)
     to_end_of_month = Column(Numeric(28, 8), nullable=True)
-    due_date = Column(Date, nullable=True)
+    total_payment_up_to_now = Column(Numeric(28, 8), nullable=True)
+    total_repayment_up_to_now = Column(Numeric(28, 8), nullable=True)
 
     def __repr__(self):
-        return f"<ParsianLoan(id={self.id}, branch_code={self.branch_code}, client_id={self.client_id})>"
+        return f"<ParsianLoan(id={self.id})>"
 
-from sqlalchemy.orm import defer
 
 class LoanRepository:
     """
@@ -229,7 +229,7 @@ class LoanRepository:
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
-        loans = self.session.query(ParsianLoan).options(defer(ParsianLoan.contract), defer(ParsianLoan.id)).limit(limit).all()
+        loans = self.session.query(ParsianLoan).limit(limit).all()
         if not loans:
             logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
             return pd.DataFrame()
@@ -1189,7 +1189,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=10_000, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=100_000, label_column="status",
         imputation_strategy="mean", need_2_remove_highly_correlated_features=False, correlation_threshold=0.9,
         do_balance=True, test_size=0.2, random_state=42)
 
