@@ -787,15 +787,15 @@ class ParsianThreeWayDecision:
       otherwise     =>  BND
     """
 
-    def __init__(self, probabilities_test: np.ndarray, alpha: float, beta: float):
+    def __init__(self, probabilities_test: np.ndarray, the_best_alpha: float, the_best_beta: float):
         """
         پارامترها:
           - probabilities_test: آرایه احتمال نکول برای داده‌های تست
           - alpha, beta: آستانه‌های تصمیم سه‌طرفه
         """
         self.probabilities_test = probabilities_test
-        self.alpha = alpha
-        self.beta = beta
+        self.the_best_alpha = the_best_alpha
+        self.the_best_beta = the_best_beta
         self.decisions = None  # لیبل نهایی هر نمونه: POS=1, NEG=0, BND=-1 (مثلاً)
 
     def apply_three_way_decision(self):
@@ -808,9 +808,9 @@ class ParsianThreeWayDecision:
 
         for i in range(n_samples):
             p_i = self.probabilities_test[i]
-            if p_i >= self.alpha:
+            if p_i >= self.the_best_alpha:
                 decisions[i] = 1  # POS
-            elif p_i <= self.beta:
+            elif p_i <= self.the_best_beta:
                 decisions[i] = 0  # NEG
             else:
                 decisions[i] = -1  # BND
@@ -1248,7 +1248,7 @@ if __name__ == "__main__":
 
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
 
-    threeway = ParsianThreeWayDecision(probabilities_test, best_alpha, best_beta)
+    threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, the_best_alpha=best_alpha, the_best_beta=best_beta)
     decisions_final = threeway.apply_three_way_decision()
     logging.info(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
                  f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
