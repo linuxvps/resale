@@ -1354,7 +1354,7 @@ if __name__ == "__main__":
 
     threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, the_best_alpha=best_alpha, the_best_beta=best_beta)
     decisions_final = threeway.apply_three_way_decision()
-    logging.debug(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
+    logging.warning(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
                  f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
                  f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
@@ -1366,7 +1366,7 @@ if __name__ == "__main__":
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
 
     logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
-    logging.info(
+    logging.error(
         f" count POS={np.sum(decisions_updated == 1)}, NEG={np.sum(decisions_updated == 0)}, BND={np.sum(decisions_updated == -1)}")
 
     # 7) گام هفتم: Evaluation نهایی
