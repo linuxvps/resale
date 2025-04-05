@@ -9,6 +9,7 @@ from colorlog import ColoredFormatter
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 Base = declarative_base()
 protected_columns = ['approval_amount', 'interest_amount']
@@ -186,6 +187,65 @@ class Plot:
 
         print(f"مقدار واریانس توضیح داده شده توسط مؤلفه‌ها: {explained_variance}")
         print(f"واریانس تجمعی (Cumulative Variance): {cumulative_variance[-1]}")
+
+    def explained_variance(self, x_train, n_components=10):
+        pca = PCA(n_components=n_components)
+        pca.fit(x_train)
+        explained_variance_ratio = pca.explained_variance_ratio_
+        cumulative_variance = np.cumsum(explained_variance_ratio)
+
+        # نمایش نسبت واریانس و واریانس تجمعی
+        print(f"Explained Variance Ratio: {explained_variance_ratio}")
+        print(f"Cumulative Variance: {cumulative_variance}")
+
+        # رسم نمودار
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(1, n_components + 1), explained_variance_ratio * 100, alpha=0.6, color='skyblue',
+                label='Individual Explained Variance')
+        plt.plot(range(1, n_components + 1), cumulative_variance * 100, color='blue', marker='o',
+                 label='Cumulative Explained Variance')
+        plt.title('Explained Variance by Principal Components')
+        plt.xlabel('Principal Components')
+        plt.ylabel('Percentage of Variance Explained')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def plot_pca_2d(self, x_train):
+        pca = PCA(n_components=2)
+        x_pca = pca.fit_transform(x_train)
+        plt.figure(figsize=(10, 6))
+        plt.scatter(x_pca[:, 0], x_pca[:, 1], c='blue', alpha=0.5)
+        plt.title('2D PCA Plot')
+        plt.xlabel('Principal Component 1')
+        plt.ylabel('Principal Component 2')
+        plt.grid(True)
+        plt.show()
+
+    def plot_pca_3d(self, x_train):
+        pca = PCA(n_components=3)
+        x_pca = pca.fit_transform(x_train)
+
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(x_pca[:, 0], x_pca[:, 1], x_pca[:, 2], c='blue', alpha=0.5)
+        ax.set_title('3D PCA Plot')
+        ax.set_xlabel('Principal Component 1')
+        ax.set_ylabel('Principal Component 2')
+        ax.set_zlabel('Principal Component 3')
+        plt.show()
+
+    def plot_tsne(self, x_train):
+        tsne = TSNE(n_components=2, random_state=42)
+        x_tsne = tsne.fit_transform(x_train)
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(x_tsne[:, 0], x_tsne[:, 1], c='blue', alpha=0.5)
+        plt.title('t-SNE Plot')
+        plt.xlabel('t-SNE Dimension 1')
+        plt.ylabel('t-SNE Dimension 2')
+        plt.grid(True)
+        plt.show()
 
 from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime, Date, String, CHAR, Float
 from datetime import datetime
@@ -1243,7 +1303,10 @@ if __name__ == "__main__":
         exit(1)
 
     visualizer = Plot()
-    visualizer.plot_pca(x_train, n_components=10)
+    visualizer.explained_variance(x_train)
+    visualizer.plot_pca_2d(x_train)
+    visualizer.plot_pca_3d(x_train)
+    visualizer.plot_tsne(x_train)
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
