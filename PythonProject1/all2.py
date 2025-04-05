@@ -338,7 +338,10 @@ class LoanRepository:
         selected_columns = [col for col in all_columns if col not in excluded_columns]
 
         # اجرای کوئری با انتخاب فقط ستون‌های مورد نظر
-        loans = self.session.query(*[getattr(ParsianLoan, col) for col in selected_columns]).limit(limit).all()
+
+        loans = (self.session.query(*[getattr(ParsianLoan, col) for col in selected_columns]).order_by(
+            ParsianLoan.insert_sysdate.desc()).limit(limit).all())
+
         if not loans:
             logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
             return pd.DataFrame()
