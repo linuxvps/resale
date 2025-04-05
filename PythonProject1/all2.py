@@ -3,19 +3,20 @@ import os
 
 import pandas as pd
 from colorlog import ColoredFormatter
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 # ------------------------------------------------------------
 # بخش مربوط به SQLAlchemy برای اتصال به دیتابیس و تعریف انتیتی
 # ------------------------------------------------------------
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 
 Base = declarative_base()
 protected_columns = ['approval_amount', 'interest_amount']
 
 formatter = ColoredFormatter("%(log_color)s%(asctime)s - %(levelname)s - %(message)s", datefmt=None, reset=True,
-    log_colors={'DEBUG': 'cyan', 'INFO': 'white', 'WARNING': 'yellow', 'ERROR': 'red', 'CRITICAL': 'bold_red', })
+                             log_colors={'DEBUG': 'cyan', 'INFO': 'white', 'WARNING': 'yellow', 'ERROR': 'red',
+                                         'CRITICAL': 'bold_red', })
 
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
@@ -36,6 +37,7 @@ import numpy as np
 from typing import Tuple
 import seaborn as sns
 
+
 class Plot:
     """
     یک کلاس عمومی برای بصری‌سازی توزیع احتمال‌ها.
@@ -44,8 +46,8 @@ class Plot:
     def __init__(self) -> None:
         pass
 
-    def plot1(self, probabilities: np.ndarray, bins: int = 100,
-              figsize: Tuple[int, int] = (10, 6), xlim: Tuple[float, float] = None) -> None:
+    def plot1(self, probabilities: np.ndarray, bins: int = 100, figsize: Tuple[int, int] = (10, 6),
+              xlim: Tuple[float, float] = None) -> None:
         """
         نمودار هیستوگرام توزیع احتمال‌ها را بر اساس آرایه ورودی رسم می‌کند.
         با افزودن جزئیات مانند خط میانگین، برچسب‌های دقیق محور و تنظیمات grid.
@@ -58,13 +60,11 @@ class Plot:
         plt.figure(figsize=figsize)
 
         # رسم هیستوگرام
-        n, bins, patches = plt.hist(probabilities, bins=bins, edgecolor='black',
-                                    alpha=0.7, color='skyblue')
+        n, bins, patches = plt.hist(probabilities, bins=bins, edgecolor='black', alpha=0.7, color='skyblue')
 
         # محاسبه و نمایش خط میانگین
         mean_val = np.mean(probabilities)
-        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2,
-                    label=f'Mean = {mean_val:.2f}')
+        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2, label=f'Mean = {mean_val:.2f}')
 
         # تنظیم محدوده محور افقی در صورت نیاز
         if xlim is not None:
@@ -81,7 +81,6 @@ class Plot:
         plt.tight_layout()
         plt.show()
 
-
     def plot_label_count(self, label_counts: pd.Series) -> None:
         plt.figure(figsize=(10, 6))
 
@@ -91,8 +90,8 @@ class Plot:
         # تبدیل سری به DataFrame برای استفاده از hue
         label_df = pd.DataFrame({'Labels': label_counts.index, 'Frequency': label_counts.values})
 
-        sns.barplot(x='Labels', y='Frequency', data=label_df, hue='Labels', dodge=False,
-                    palette=['#4CAF50', '#FF6F61'], legend=False)
+        sns.barplot(x='Labels', y='Frequency', data=label_df, hue='Labels', dodge=False, palette=['#4CAF50', '#FF6F61'],
+                    legend=False)
 
         plt.title('Label Distribution After Conversion', fontsize=18)
         plt.xlabel('Labels (0: Non-Default, 1: Default)', fontsize=14)
@@ -101,8 +100,9 @@ class Plot:
         plt.grid(axis='y', linestyle='--', alpha=0.6)
         plt.tight_layout()
         plt.show()
-    def plot_with_thresholds(self, probabilities: np.ndarray, alpha: float, beta: float,
-                             bins: int = 100, figsize: Tuple[int, int] = (12, 6), xlim: Tuple[float, float] = None) -> None:
+
+    def plot_with_thresholds(self, probabilities: np.ndarray, alpha: float, beta: float, bins: int = 100,
+                             figsize: Tuple[int, int] = (12, 6), xlim: Tuple[float, float] = None) -> None:
         """
         رسم نمودار احتمال‌ها با اضافه کردن خطوط آستانه alpha و beta.
 
@@ -116,13 +116,11 @@ class Plot:
         plt.figure(figsize=figsize)
 
         # رسم هیستوگرام
-        n, bins_array, patches = plt.hist(probabilities, bins=bins, edgecolor='black',
-                                          alpha=0.7, color='skyblue')
+        n, bins_array, patches = plt.hist(probabilities, bins=bins, edgecolor='black', alpha=0.7, color='skyblue')
 
         # محاسبه و نمایش خط میانگین
         mean_val = np.mean(probabilities)
-        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2,
-                    label=f'Mean = {mean_val:.2f}')
+        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2, label=f'Mean = {mean_val:.2f}')
 
         # رسم خطوط alpha و beta
         plt.axvline(alpha, color='green', linestyle='-', linewidth=3, label=f'Alpha (POS) = {alpha:.3f}')
@@ -160,7 +158,7 @@ class Plot:
         plt.title('Feature Importance (Top {})'.format(top_n), fontsize=16)
         plt.xlabel('Importance', fontsize=14)
         plt.ylabel('Features', fontsize=14)
-        plt.legend([],[], frameon=False)  # مخفی کردن legend اضافی
+        plt.legend([], [], frameon=False)  # مخفی کردن legend اضافی
         plt.show()
 
     def plot_pca(self, X: pd.DataFrame, n_components: int = 2):
@@ -176,8 +174,10 @@ class Plot:
         cumulative_variance = explained_variance.cumsum()
 
         plt.figure(figsize=(10, 6))
-        plt.bar(range(1, n_components + 1), explained_variance * 100, alpha=0.5, align='center', label='Individual Explained Variance')
-        plt.step(range(1, n_components + 1), cumulative_variance * 100, where='mid', label='Cumulative Explained Variance')
+        plt.bar(range(1, n_components + 1), explained_variance * 100, alpha=0.5, align='center',
+                label='Individual Explained Variance')
+        plt.step(range(1, n_components + 1), cumulative_variance * 100, where='mid',
+                 label='Cumulative Explained Variance')
         plt.xlabel('Principal Components', fontsize=14)
         plt.ylabel('Percentage of Variance Explained', fontsize=14)
         plt.title('Explained Variance by Principal Components', fontsize=16)
@@ -247,8 +247,10 @@ class Plot:
         plt.grid(True)
         plt.show()
 
+
 from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime, Date, String, CHAR, Float
 from datetime import datetime
+
 
 class ParsianLoan(Base):
     __tablename__ = "parsian_loan"
@@ -328,7 +330,8 @@ class LoanRepository:
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
         # تعریف لیست ستون‌هایی که نمی‌خواهیم انتخاب بشن (مثلاً 'contract' و 'id')
-        excluded_columns = [ParsianLoan.contract.key,ParsianLoan.id.key,ParsianLoan.loan_file_numberr.key,ParsianLoan.total_payment_up_to_now.key]
+        excluded_columns = [ParsianLoan.contract.key, ParsianLoan.id.key, ParsianLoan.loan_file_numberr.key,
+                            ParsianLoan.total_payment_up_to_now.key]
         # دریافت لیست تمام ستون‌های موجود در جدول
         all_columns = [column.name for column in ParsianLoan.__table__.columns]
         # انتخاب ستون‌هایی که در لیست excluded وجود ندارند
@@ -384,7 +387,7 @@ class ParsianDefaultProbabilityModel:
         if self.model_type.lower() == "lightgbm":
             logging.info("🔵 در حال آموزش مدل LightGBM...")
             self.model = LGBMClassifier(n_estimators=self.n_estimators, learning_rate=self.learning_rate,
-                random_state=self.random_state, **self.kwargs)
+                                        random_state=self.random_state, **self.kwargs)
         else:
             raise ValueError("فعلاً فقط مدل lightgbm پشتیبانی می‌شود (برای مثال).")
 
@@ -445,7 +448,7 @@ class LoanPreprocessor:
         logger.warning(df[label_column].value_counts())
 
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
-        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته","سررسيد شده"}
+        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد شده"}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
         # لاگ گرفتن از توزیع داده‌ها
         label_counts = df[label_column].value_counts()
@@ -516,8 +519,8 @@ class ParsianPreprocessingManager:
     """
 
     def __init__(self, repository, limit_records=10000, label_column="status", imputation_strategy="mean",
-            need_2_remove_highly_correlated_features=False, correlation_threshold=0.9, do_balance=True, test_size=0.2,
-            random_state=42):
+                 need_2_remove_highly_correlated_features=False, correlation_threshold=0.9, do_balance=True,
+                 test_size=0.2, random_state=42):
         self.repository = repository
         self.limit_records = limit_records
         self.label_column = label_column
@@ -574,7 +577,7 @@ class ParsianPreprocessingManager:
         # حذف ویژگی‌های با همبستگی بالا
         if self.need_2_remove_highly_correlated_features:
             df = self.preprocessor.remove_highly_correlated_features(df, threshold=self.correlation_threshold,
-                class_column=self.label_column)
+                                                                     class_column=self.label_column)
 
         # ایمپیوت
         df_imputed = pd.DataFrame(self.preprocessor.imputer.fit_transform(df), columns=df.columns)
@@ -585,7 +588,7 @@ class ParsianPreprocessingManager:
 
         # تقسیم آموزش/آزمون
         x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=self.test_size,
-            random_state=self.random_state)
+                                                            random_state=self.random_state)
 
         # انتخاب ویژگی
         x_train_selected = self.preprocessor.select_features(x_train, y_train)
@@ -672,9 +675,9 @@ class ParsianCostMatrix:
             # cost_bp = ...
             # cost_bn = ...
 
-            self.cost_matrix.append({"PP": cost_pp, "NN": cost_nn, "PN": cost_pn, "NP": cost_np# "BP": cost_bp,
-                # "BN": cost_bn
-            })
+            self.cost_matrix.append({"PP": cost_pp, "NN": cost_nn, "PN": cost_pn, "NP": cost_np  # "BP": cost_bp,
+                                     # "BN": cost_bn
+                                     })
 
     def get_cost_for_sample(self, index: int):
         """
@@ -718,7 +721,7 @@ class ParsianThresholdNSGA2:
     """
 
     def __init__(self, probabilities_test: np.ndarray, cost_matrix: list, true_labels: np.ndarray, pop_size=50,
-            n_gen=100, step_bnd=False):
+                 n_gen=100, step_bnd=False):
         """
         پارامترها:
          - step_bnd: اگر True باشد، objective دوم را تعداد نمونه‌های BND در نظر می‌گیریم
@@ -789,7 +792,7 @@ class ParsianThresholdNSGA2:
                      تا بتوانیم از داده‌های probabilities_test و ... استفاده کنیم.
             """
             super().__init__(n_var=2, n_obj=2, n_constr=1, xl=np.array([0.0, 0.0]), xu=np.array([1.0, 1.0]),
-                type_var=np.double)
+                             type_var=np.double)
             self.outer = outer  # ارجاع به کلاس بیرونی
 
         def _evaluate(self, X, out, *args, **kwargs):
@@ -970,10 +973,10 @@ class ParsianBNDResolver:
         if self.model_type.lower() == "stacking":
             # چندین مدل پایه + متا
             base_estimators = [("rf", RandomForestClassifier(n_estimators=50, random_state=42)),
-                ("xgb", XGBClassifier(eval_metric="logloss", random_state=42))]
+                               ("xgb", XGBClassifier(eval_metric="logloss", random_state=42))]
             meta_estimator = LogisticRegression(max_iter=1000, random_state=42)
             self.classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_estimator, cv=5,
-                n_jobs=-1)
+                                                 n_jobs=-1)
         else:
             # می‌توانید روش‌های دیگر را اضافه کنید
             raise ValueError("فقط مدل 'stacking' پیاده شده است.")
@@ -1023,7 +1026,7 @@ class ParsianFinalEvaluator:
     """
 
     def __init__(self, true_labels: np.ndarray, final_decisions: np.ndarray, probabilities_test: np.ndarray = None,
-            cost_matrix: list = None):
+                 cost_matrix: list = None):
         """
         پارامترها:
           - true_labels: آرایه برچسب‌های واقعی تست (۰ یا ۱)
@@ -1106,7 +1109,8 @@ class ParsianFinalEvaluator:
         gm = np.sqrt((TP / (TP + FN)) * (TN / (TN + FP))) if (TP + FN) != 0 and (TN + FP) != 0 else 0
 
         metrics_dict = {"ModelName": "Proposed-3WD", "TN": TN, "FP": FP, "FN": FN, "TP": TP, "BalancedAccuracy": b_acc,
-            "Precision": precision, "Recall": recall, "F1": f1, "GM": gm, "AUC": auc_val, "TotalCost": total_cost}
+                        "Precision": precision, "Recall": recall, "F1": f1, "GM": gm, "AUC": auc_val,
+                        "TotalCost": total_cost}
         return metrics_dict
 
 
@@ -1131,7 +1135,7 @@ class ParsianMethodComparison:
     """
 
     def __init__(self, x_train: pd.DataFrame, y_train: pd.Series, x_test: pd.DataFrame, y_test: pd.Series,
-            cost_matrix: list = None, model_comparisons: dict = None):
+                 cost_matrix: list = None, model_comparisons: dict = None):
         """
         پارامترها:
          - x_train, y_train: داده‌های آموزش
@@ -1158,15 +1162,16 @@ class ParsianMethodComparison:
             from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
             self.model_comparisons = {"Bayes": GaussianNB(), "KNN": KNeighborsClassifier(),
-                "LR": LogisticRegression(max_iter=10_000), "NN": MLPClassifier(max_iter=300),
-                "AdaBoost": AdaBoostClassifier(algorithm="SAMME"), "ERT": ExtraTreesClassifier(),
-                "GBDT": GradientBoostingClassifier(), "LGBM": LGBMClassifier(verbose=-1),
-                "RF": RandomForestClassifier(), "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
-                "Stacking": StackingClassifier(
-                    estimators=[('lda', LinearDiscriminantAnalysis()), ('knn', KNeighborsClassifier())],
-                    final_estimator=RandomForestClassifier()),
-                "Bagging": BaggingClassifier(estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
-                    n_estimators=10, random_state=42)}
+                                      "LR": LogisticRegression(max_iter=10_000), "NN": MLPClassifier(max_iter=300),
+                                      "AdaBoost": AdaBoostClassifier(algorithm="SAMME"), "ERT": ExtraTreesClassifier(),
+                                      "GBDT": GradientBoostingClassifier(), "LGBM": LGBMClassifier(verbose=-1),
+                                      "RF": RandomForestClassifier(),
+                                      "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
+                                      "Stacking": StackingClassifier(estimators=[('lda', LinearDiscriminantAnalysis()),
+                                                                                 ('knn', KNeighborsClassifier())],
+                                          final_estimator=RandomForestClassifier()), "Bagging": BaggingClassifier(
+                    estimator=ExtraTreesClassifier(n_estimators=100, random_state=42), n_estimators=10,
+                    random_state=42)}
         else:
             self.model_comparisons = model_comparisons
 
@@ -1222,7 +1227,7 @@ class ParsianMethodComparison:
             total_cost = tc
 
         return {"TP": TP, "TN": TN, "FP": FP, "FN": FN, "BalancedAccuracy": b_acc, "Precision": precision,
-            "Recall": recall, "F1": f1, "GM": gm, "AUC": auc_val, "TotalCost": total_cost}
+                "Recall": recall, "F1": f1, "GM": gm, "AUC": auc_val, "TotalCost": total_cost}
 
     def run_comparison(self):
         """
@@ -1248,7 +1253,7 @@ class ParsianMethodComparison:
                 y_prob = None
 
             metrics = self._compute_metrics(y_true=self.y_test.values, y_pred=y_pred, y_prob=y_prob,
-                cost_matrix=self.cost_matrix)
+                                            cost_matrix=self.cost_matrix)
             metrics["ModelName"] = model_name
             results_list.append(metrics)
 
@@ -1266,7 +1271,7 @@ class ParsianMethodComparison:
         باشد.
         """
         self.comparison_table = pd.concat([self.comparison_table, pd.DataFrame([proposed_method_metrics])],
-            ignore_index=True)
+                                          ignore_index=True)
         self.comparison_table.sort_values(by="BalancedAccuracy", ascending=False, inplace=True)
         self.comparison_table.reset_index(drop=True, inplace=True)
         logging.info("🔵 نتایج روش پیشنهادی هم به جدول مقایسه اضافه شد.")
@@ -1294,8 +1299,10 @@ if __name__ == "__main__":
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
     prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=10_000, label_column="status",
-        imputation_strategy="mean", need_2_remove_highly_correlated_features=False, correlation_threshold=0.9,
-        do_balance=True, test_size=0.2, random_state=42)
+                                               imputation_strategy="mean",
+                                               need_2_remove_highly_correlated_features=False,
+                                               correlation_threshold=0.9, do_balance=True, test_size=0.2,
+                                               random_state=42)
 
     x_train, y_train, x_test, y_test, original_df = prep_manager.step1_process_data()
     if x_train is None:
@@ -1310,7 +1317,7 @@ if __name__ == "__main__":
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
-        random_state=42)
+                                                   random_state=42)
     default_model.fit_model(x_train, y_train)
     probabilities_test = default_model.predict_default_probability(x_test)
 
@@ -1330,8 +1337,8 @@ if __name__ == "__main__":
     from numpy import array
 
     threshold_nsgaii = ParsianThresholdNSGA2(probabilities_test=probabilities_test, cost_matrix=all_costs,
-        true_labels=y_test.values,  # یا array(y_test)
-        pop_size=50, n_gen=100, step_bnd=False)
+                                             true_labels=y_test.values,  # یا array(y_test)
+                                             pop_size=50, n_gen=100, step_bnd=False)
     threshold_nsgaii.optimize()
 
     solutions, objectives = threshold_nsgaii.get_pareto_front()
@@ -1352,11 +1359,12 @@ if __name__ == "__main__":
 
     logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
 
-    threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, the_best_alpha=best_alpha, the_best_beta=best_beta)
+    threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, the_best_alpha=best_alpha,
+                                       the_best_beta=best_beta)
     decisions_final = threeway.apply_three_way_decision()
     logging.warning(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
-                 f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
-                 f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
+                    f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
+                    f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
     # 6) گام ششم: تصمیم‌گیری روی BNDها
     bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="stacking")
@@ -1371,18 +1379,18 @@ if __name__ == "__main__":
 
     # 7) گام هفتم: Evaluation نهایی
     final_eval = ParsianFinalEvaluator(true_labels=y_test.values, final_decisions=decisions_updated,
-        probabilities_test=probabilities_test,  # اگر AUC بخواهیم
-        cost_matrix=all_costs  # اگر هزینه بخواهیم
-    )
+                                       probabilities_test=probabilities_test,  # اگر AUC بخواهیم
+                                       cost_matrix=all_costs  # اگر هزینه بخواهیم
+                                       )
     results = final_eval.evaluate_metrics()
     logging.info("🔹 نتایج نهایی مدل:")
     for k, v in results.items():
         logging.info(f"  {k}: {v}")
 
     comparator = ParsianMethodComparison(x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test,
-        cost_matrix=all_costs,  # اگر می‌خواهید هزینه هم محاسبه شود
-        model_comparisons=None  # اگر None بگذارید، چند مدل پایه به صورت پیش‌فرض دارد
-    )
+                                         cost_matrix=all_costs,  # اگر می‌خواهید هزینه هم محاسبه شود
+                                         model_comparisons=None  # اگر None بگذارید، چند مدل پایه به صورت پیش‌فرض دارد
+                                         )
     comparison_df = comparator.run_comparison()
     logging.error("\nنتایج مدل‌های رقیب:\n" + str(comparison_df))
 
