@@ -328,7 +328,7 @@ class LoanRepository:
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
         # تعریف لیست ستون‌هایی که نمی‌خواهیم انتخاب بشن (مثلاً 'contract' و 'id')
-        excluded_columns = [ParsianLoan.contract.key,ParsianLoan.id.key]
+        excluded_columns = [ParsianLoan.contract.key,ParsianLoan.id.key,ParsianLoan.loan_file_numberr.key,ParsianLoan.total_payment_up_to_now.key]
         # دریافت لیست تمام ستون‌های موجود در جدول
         all_columns = [column.name for column in ParsianLoan.__table__.columns]
         # انتخاب ستون‌هایی که در لیست excluded وجود ندارند
@@ -1354,7 +1354,7 @@ if __name__ == "__main__":
 
     threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, the_best_alpha=best_alpha, the_best_beta=best_beta)
     decisions_final = threeway.apply_three_way_decision()
-    logging.info(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
+    logging.debug(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
                  f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
                  f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
