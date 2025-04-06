@@ -1172,9 +1172,10 @@ class ParsianMethodComparison:
                                       "XGB": XGBClassifier(eval_metric='logloss', verbosity=0),
                                       "Stacking": StackingClassifier(estimators=[('lda', LinearDiscriminantAnalysis()),
                                                                                  ('knn', KNeighborsClassifier())],
-                                          final_estimator=RandomForestClassifier()), "Bagging": BaggingClassifier(
-                    estimator=ExtraTreesClassifier(n_estimators=100, random_state=42), n_estimators=10,
-                    random_state=42)}
+                                                                     final_estimator=RandomForestClassifier()),
+                                      "Bagging": BaggingClassifier(
+                                          estimator=ExtraTreesClassifier(n_estimators=100, random_state=42),
+                                          n_estimators=10, random_state=42)}
         else:
             self.model_comparisons = model_comparisons
 
@@ -1301,7 +1302,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=10_000, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=1_093_064, label_column="status",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.9, do_balance=True, test_size=0.2,
