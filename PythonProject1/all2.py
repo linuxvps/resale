@@ -324,6 +324,35 @@ class LoanRepository:
         SessionLocal = sessionmaker(bind=self.engine)
         self.session = SessionLocal()
 
+    def fetch_loans_in_chunks(self, chunk_size=100000):
+        total_rows = self.session.query(ParsianLoan).count()
+        offset = 0
+        dataframes = []
+        while offset < total_rows:
+            loans_chunk = (self.session.query(ParsianLoan)
+                           .order_by(ParsianLoan.insert_sysdate.desc())
+                           .offset(offset)
+                           .limit(chunk_size)
+                           .all())
+            if not loans_chunk:
+                break
+            # ستون‌هایی که نیاز به دریافت نداریم
+            excluded_columns = [ParsianLoan.contract.key, ParsianLoan.id.key, ParsianLoan.loan_file_numberr.key,
+                                ParsianLoan.total_payment_up_to_now.key]
+            all_columns = list(ParsianLoan.__table__.columns.keys())
+            selected_columns = [col for col in all_columns if col not in excluded_columns]
+            data = {col: [getattr(loan, col) for loan in loans_chunk] for col in selected_columns}
+            df_chunk = pd.DataFrame(data)
+            dataframes.append(df_chunk)
+            offset += chunk_size
+            logging.info(f"دریافت {min(offset, total_rows)} از {total_rows} رکورد")
+        if dataframes:
+            return pd.concat(dataframes, ignore_index=True)
+        else:
+            return pd.DataFrame()
+
+
+
     def fetch_loans(self, limit=10_000):
         """
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
@@ -557,7 +586,12 @@ class ParsianPreprocessingManager:
         """
         logging.info("🔵 [Step1] شروع آماده‌سازی داده‌ها (Preprocessing).")
 
-        df = self.repository.fetch_loans(limit=self.limit_records)
+        # اگر تعداد رکوردها بسیار زیاد باشد، از روش chunk استفاده می‌کنیم
+        if self.limit_records > 50_000:
+            df = self.repository.fetch_loans_in_chunks(chunk_size=100000)
+        else:
+            df = self.repository.fetch_loans(limit=self.limit_records)
+
         if df.empty:
             logging.error("هیچ داده‌ای دریافت نشد. فرآیند پایان یافت.")
             return None, None, None, None, None
@@ -1314,10 +1348,10 @@ if __name__ == "__main__":
         exit(1)
 
     visualizer = Plot()
-    visualizer.explained_variance(x_train)
-    visualizer.plot_pca_2d(x_train)
-    visualizer.plot_pca_3d(x_train)
-    visualizer.plot_tsne(x_train)
+    # visualizer.explained_variance(x_train)
+    # visualizer.plot_pca_2d(x_train)
+    # visualizer.plot_pca_3d(x_train)
+    # visualizer.plot_tsne(x_train)
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
