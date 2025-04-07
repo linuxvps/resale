@@ -253,7 +253,7 @@ from datetime import datetime
 
 
 class ParsianLoan(Base):
-    __tablename__ = "parsian_loan"
+    __tablename__ = "parsian_loan_2"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     advance_pay = Column(Numeric(28, 8), nullable=True)
@@ -1332,7 +1332,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=1_093_064, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=240_000, label_column="status",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.9, do_balance=True, test_size=0.2,
