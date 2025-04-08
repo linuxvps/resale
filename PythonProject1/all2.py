@@ -253,7 +253,7 @@ from datetime import datetime
 
 
 class ParsianLoan(Base):
-    __tablename__ = "parsian_loan"
+    __tablename__ = "parsian_loan_2"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     advance_pay = Column(Numeric(28, 8), nullable=True)
@@ -324,7 +324,7 @@ class LoanRepository:
         SessionLocal = sessionmaker(bind=self.engine)
         self.session = SessionLocal()
 
-    def fetch_loans_in_chunks(self, chunk_size=100000):
+    def fetch_loans_in_chunks(self, excluded_columns,chunk_size=100000):
         total_rows = self.session.query(ParsianLoan).count()
         offset = 0
         dataframes = []
@@ -337,8 +337,6 @@ class LoanRepository:
             if not loans_chunk:
                 break
             # ستون‌هایی که نیاز به دریافت نداریم
-            excluded_columns = [ParsianLoan.contract.key, ParsianLoan.id.key, ParsianLoan.loan_file_numberr.key,
-                                ParsianLoan.total_payment_up_to_now.key]
             all_columns = list(ParsianLoan.__table__.columns.keys())
             selected_columns = [col for col in all_columns if col not in excluded_columns]
             data = {col: [getattr(loan, col) for loan in loans_chunk] for col in selected_columns}
@@ -353,14 +351,11 @@ class LoanRepository:
 
 
 
-    def fetch_loans(self, limit=10_000):
+    def fetch_loans(self,excluded_columns, limit=10_000):
         """
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
-        # تعریف لیست ستون‌هایی که نمی‌خواهیم انتخاب بشن (مثلاً 'contract' و 'id')
-        excluded_columns = [ParsianLoan.contract.key, ParsianLoan.id.key, ParsianLoan.loan_file_numberr.key,
-                            ParsianLoan.total_payment_up_to_now.key]
         # دریافت لیست تمام ستون‌های موجود در جدول
         all_columns = [column.name for column in ParsianLoan.__table__.columns]
         # انتخاب ستون‌هایی که در لیست excluded وجود ندارند
@@ -585,12 +580,13 @@ class ParsianPreprocessingManager:
         خروجی: (x_train, y_train, x_test, y_test, original_df)
         """
         logging.info("🔵 [Step1] شروع آماده‌سازی داده‌ها (Preprocessing).")
-
+        excluded_columns = [ParsianLoan.contract.key, ParsianLoan.id.key, ParsianLoan.loan_file_numberr.key,
+                            ParsianLoan.total_payment_up_to_now.key]
         # اگر تعداد رکوردها بسیار زیاد باشد، از روش chunk استفاده می‌کنیم
         if self.limit_records > 50_000:
-            df = self.repository.fetch_loans_in_chunks(chunk_size=100000)
+            df = self.repository.fetch_loans_in_chunks(excluded_columns,chunk_size=100000)
         else:
-            df = self.repository.fetch_loans(limit=self.limit_records)
+            df = self.repository.fetch_loans(excluded_columns,limit=self.limit_records)
 
         if df.empty:
             logging.error("هیچ داده‌ای دریافت نشد. فرآیند پایان یافت.")
@@ -1336,7 +1332,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=1_093_064, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=240_000, label_column="status",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.9, do_balance=True, test_size=0.2,
