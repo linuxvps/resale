@@ -312,6 +312,38 @@ class ParsianLoan(Base):
         return f"<ParsianLoan(id={self.id})>"
 
 
+class LoanDetail(Base):
+    __tablename__ = "loan_detail"
+
+    id = Column(Numeric, primary_key=True)
+    loan_file_number = Column(Numeric)
+    loan_amount = Column(Numeric)
+    total_debt_in_toman = Column(Numeric)
+    current_loan_rates = Column(Numeric)
+    loan_purpose = Column(String(255))
+    contract_due_date = Column(Date)
+    installment_loan_award_date = Column(Date)
+    first_payment_date_in_du = Column(Date)
+    grant_date = Column(Date)
+    application_type = Column(CHAR(1))
+    loan_status = Column(String(50))
+    total_installment_amount = Column(Numeric)
+    num_of_installments = Column(Integer)
+    first_installment_due = Column(Date)
+    last_installment_due = Column(Date)
+    default_count = Column(Integer)
+    company_type = Column(Integer)
+    postal_code = Column(String(20))
+    city_code = Column(String(20))
+    region = Column(String(100))
+    province = Column(String(100))
+    approximate_income_in_toman = Column(Numeric)
+    annual_turnover_in_toman = Column(Numeric)
+
+    def __repr__(self):
+        return f"<LoanDetail(id={self.id}, loan_file_number={self.loan_file_number})>"
+
+
 class LoanRepository:
     """
     ریپازیتوری برای واکشی داده از دیتابیس parsian_loan با SQLAlchemy.
