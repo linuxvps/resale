@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
-protected_columns = ['approval_amount', 'interest_amount']
+protected_columns = ['LOAN_AMOUNT', 'CURRENT_LOAN_RATES']
 
 formatter = ColoredFormatter("%(log_color)s%(asctime)s - %(levelname)s - %(message)s", datefmt=None, reset=True,
                              log_colors={'DEBUG': 'cyan', 'INFO': 'white', 'WARNING': 'yellow', 'ERROR': 'red',
@@ -313,35 +313,32 @@ class ParsianLoan(Base):
 
 
 class LoanDetail(Base):
-    __tablename__ = "loan_detail"
+    __tablename__ = "MY_TABLE"
 
-    id = Column(Numeric, primary_key=True)
-    loan_file_number = Column(Numeric)
-    loan_amount = Column(Numeric)
-    total_debt_in_toman = Column(Numeric)
-    current_loan_rates = Column(Numeric)
-    loan_purpose = Column(String(255))
-    contract_due_date = Column(Date)
-    installment_loan_award_date = Column(Date)
-    first_payment_date_in_du = Column(Date)
-    grant_date = Column(Date)
-    application_type = Column(CHAR(1))
-    loan_status = Column(String(50))
-    total_installment_amount = Column(Numeric)
-    num_of_installments = Column(Integer)
-    first_installment_due = Column(Date)
-    last_installment_due = Column(Date)
-    default_count = Column(Integer)
-    company_type = Column(Integer)
-    postal_code = Column(String(20))
-    city_code = Column(String(20))
-    region = Column(String(100))
-    province = Column(String(100))
-    approximate_income_in_toman = Column(Numeric)
-    annual_turnover_in_toman = Column(Numeric)
-
-    def __repr__(self):
-        return f"<LoanDetail(id={self.id}, loan_file_number={self.loan_file_number})>"
+    ID = Column(BigInteger, primary_key=True, autoincrement=False)
+    LOAN_FILE_NUMBER = Column(BigInteger, nullable=True)
+    LOAN_AMOUNT = Column(Numeric(65, 2), nullable=True)
+    TOTAL_DEBT_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
+    CURRENT_LOAN_RATES = Column(Numeric(65, 2), nullable=True)
+    LOAN_PURPOSE = Column(String(255), nullable=True)
+    CONTRACT_DUE_DATE = Column(Date, nullable=True)
+    INSTALLMENT_LOAN_AWARD_DATE = Column(Date, nullable=True)
+    FIRST_PAYMENT_DATE_IN_DU = Column(Date, nullable=True)
+    GRANT_DATE = Column(Date, nullable=True)
+    APPLICATION_TYPE = Column(CHAR, nullable=True)
+    LOAN_STATUS = Column(String(255), nullable=True)
+    TOTAL_INSTALLMENT_AMOUNT = Column(Numeric(65, 2), nullable=True)
+    NUM_OF_INSTALLMENTS = Column(BigInteger, nullable=True)
+    FIRST_INSTALLMENT_DUE = Column(Date, nullable=True)
+    LAST_INSTALLMENT_DUE = Column(Date, nullable=True)
+    DEFAULT_COUNT = Column(BigInteger, nullable=True)
+    COMPANY_TYPE = Column(BigInteger, nullable=True)
+    POSTAL_CODE = Column(String(20), nullable=True)
+    CITY_CODE = Column(String(20), nullable=True)
+    REGION = Column(String(255), nullable=True)
+    PROVINCE = Column(String(255), nullable=True)
+    APPROXIMATE_INCOME_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
+    ANNUAL_TURNOVER_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
 
 
 class LoanRepository:
@@ -357,19 +354,19 @@ class LoanRepository:
         self.session = SessionLocal()
 
     def fetch_loans_in_chunks(self, excluded_columns,chunk_size=100000):
-        total_rows = self.session.query(ParsianLoan).count()
+        total_rows = self.session.query(LoanDetail).count()
         offset = 0
         dataframes = []
         while offset < total_rows:
-            loans_chunk = (self.session.query(ParsianLoan)
-                           .order_by(ParsianLoan.insert_sysdate.desc())
+            loans_chunk = (self.session.query(LoanDetail)
+                           .order_by(LoanDetail.LOAN_FILE_NUMBER.desc())
                            .offset(offset)
                            .limit(chunk_size)
                            .all())
             if not loans_chunk:
                 break
             # ستون‌هایی که نیاز به دریافت نداریم
-            all_columns = list(ParsianLoan.__table__.columns.keys())
+            all_columns = list(LoanDetail.__table__.columns.keys())
             selected_columns = [col for col in all_columns if col not in excluded_columns]
             data = {col: [getattr(loan, col) for loan in loans_chunk] for col in selected_columns}
             df_chunk = pd.DataFrame(data)
@@ -389,14 +386,14 @@ class LoanRepository:
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
         # دریافت لیست تمام ستون‌های موجود در جدول
-        all_columns = [column.name for column in ParsianLoan.__table__.columns]
+        all_columns = [column.name for column in LoanDetail.__table__.columns]
         # انتخاب ستون‌هایی که در لیست excluded وجود ندارند
         selected_columns = [col for col in all_columns if col not in excluded_columns]
 
         # اجرای کوئری با انتخاب فقط ستون‌های مورد نظر
 
-        loans = (self.session.query(*[getattr(ParsianLoan, col) for col in selected_columns]).order_by(
-            ParsianLoan.insert_sysdate.desc()).limit(limit).all())
+        loans = (self.session.query(*[getattr(LoanDetail, col) for col in selected_columns]).order_by(
+            LoanDetail.LOAN_FILE_NUMBER.desc()).limit(limit).all())
 
         if not loans:
             logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
@@ -405,7 +402,7 @@ class LoanRepository:
         # تبدیل داده‌ها به DataFrame
         data = {col: [getattr(loan, col) for loan in loans] for col in selected_columns}
         df = pd.DataFrame(data)
-        logging.info(f"✅ {len(df)} رکورد از دیتابیس دریافت شد (parsian_loan).")
+        logging.info(f"✅ {len(df)} رکورد از دیتابیس دریافت شد (LoanDetail).")
         return df
 
 
@@ -507,7 +504,7 @@ class LoanPreprocessor:
         logger.warning(df[label_column].value_counts())
 
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
-        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد شده"}
+        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد" , "باطل شده" , "درخواست رد شد"}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
         # لاگ گرفتن از توزیع داده‌ها
         label_counts = df[label_column].value_counts()
@@ -612,8 +609,7 @@ class ParsianPreprocessingManager:
         خروجی: (x_train, y_train, x_test, y_test, original_df)
         """
         logging.info("🔵 [Step1] شروع آماده‌سازی داده‌ها (Preprocessing).")
-        excluded_columns = [ParsianLoan.contract.key, ParsianLoan.id.key, ParsianLoan.loan_file_numberr.key,
-                            ParsianLoan.total_payment_up_to_now.key]
+        excluded_columns = [LoanDetail.REGION.key]
         # اگر تعداد رکوردها بسیار زیاد باشد، از روش chunk استفاده می‌کنیم
         if self.limit_records > 50_000:
             df = self.repository.fetch_loans_in_chunks(excluded_columns,chunk_size=100000)
@@ -734,7 +730,7 @@ class ParsianCostMatrix:
             cost_pp = 0.0
             cost_nn = 0.0
             cost_pn = interest  # پذیرش اشتباه نمونه‌ای که واقعاً غیرنکول است
-            cost_np = principal + interest  # رد اشتباه نمونه‌ای که واقعاً نکول است
+            cost_np = principal + round(interest * principal) # رد اشتباه نمونه‌ای که واقعاً نکول است
 
             # اگر بخواهیم هزینه تصمیم مرزی اضافه کنیم:
             # cost_bp = ...
@@ -1364,7 +1360,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=240_000, label_column="status",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=700_000, label_column="LOAN_STATUS",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.9, do_balance=True, test_size=0.2,
@@ -1395,7 +1391,7 @@ if __name__ == "__main__":
 
     # 3) گام سوم: محاسبه ماتریس زیان
     # فرض می‌کنیم x_test دارای ستون‌های approval_amount و interest_amount است.
-    cost_calc = ParsianCostMatrix(df_test=x_test, approval_col="approval_amount", interest_col="interest_amount")
+    cost_calc = ParsianCostMatrix(df_test=x_test, approval_col="LOAN_AMOUNT", interest_col="CURRENT_LOAN_RATES")
     cost_calc.compute_costs()
     all_costs = cost_calc.get_all_costs()
 
@@ -1417,6 +1413,9 @@ if __name__ == "__main__":
     # انتخاب راه‌حل نهایی از میان راه‌حل‌های پارتو بر اساس کمترین مقدار objective دوم (boundary_size)
     final_solution, final_objectives = threshold_nsgaii.get_final_solution()
     best_alpha, best_beta = final_solution[0], final_solution[1]
+
+    best_alpha = 0.65
+    best_beta = 0.25
     logging.warning(
         f"🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
 
