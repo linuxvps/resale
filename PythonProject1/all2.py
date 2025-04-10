@@ -675,9 +675,9 @@ class ParsianPreprocessingManager:
 
 
 ###########################################
-# گام سوم: محاسبه ماتریس زیان (Cost Computation)
+# گام سوم: محاسبه ماتریس زیان (loss Computation)
 ###########################################
-class ParsianCostMatrix:
+class ParsianLossMatrix:
     """
     در این کلاس، بر اساس داده‌های جریان نقدی (مثلاً approval_amount, interest_amount)
     هزینه‌های تصمیم‌گیری برای هر نمونه محاسبه می‌شود.
@@ -1391,7 +1391,7 @@ if __name__ == "__main__":
 
     # 3) گام سوم: محاسبه ماتریس زیان
     # فرض می‌کنیم x_test دارای ستون‌های approval_amount و interest_amount است.
-    cost_calc = ParsianCostMatrix(df_test=x_test, approval_col="LOAN_AMOUNT", interest_col="CURRENT_LOAN_RATES")
+    cost_calc = ParsianLossMatrix(df_test=x_test, approval_col="LOAN_AMOUNT", interest_col="CURRENT_LOAN_RATES")
     cost_calc.compute_costs()
     all_costs = cost_calc.get_all_costs()
 
