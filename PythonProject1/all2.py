@@ -568,6 +568,77 @@ class LoanPreprocessor:
         logging.info("ویژگی‌های انتخاب نشده: " + ", ".join(not_selected_features))
         return X.loc[:, selected_features]
 
+    def summary_stats_for_df(self,df: pd.DataFrame) -> pd.DataFrame:
+        """
+        این تابع برای هر ستون موجود در DataFrame، آماری شامل:
+        تعداد یکتا، تعداد داده‌های گمشده (NaN)، مینیموم، ماکسیموم، دامنه (ماکسیموم - مینیموم)،
+        میانگین، واریانس و انحراف معیار را محاسبه می‌کند.
+
+        نکات:
+        - برای ستون‌های عددی، تمامی آماره‌ها به صورت دقیق محاسبه می‌شوند.
+        - برای ستون‌های تاریخ (datetime)، مینیموم، ماکسیموم، دامنه و میانگین (به عنوان تاریخ میانگین) محاسبه می‌شود.
+          اما واریانس و انحراف معیار به دلیل عدم تناسب معنایی با تاریخ، به عنوان None برگردانده می‌شوند.
+        - برای سایر نوع داده‌ها، تنها مینیموم و ماکسیموم (و در صورت امکان دامنه) محاسبه شده و آماره‌های عددی برابر None خواهند بود.
+        """
+        stats_rows = []
+
+        for col in df.columns:
+            # محاسبه تعداد یکتا (بدون احتساب NaN)
+            unique_count = df[col].nunique(dropna=True)
+            # محاسبه تعداد مقادیر گمشده
+            missing_count = df[col].isna().sum()
+
+            # بررسی نوع داده ستون برای پردازش مناسب
+            try:
+                # اگر ستون عددی باشد
+                if np.issubdtype(df[col].dtype, np.number):
+                    col_min = df[col].min(skipna=True)
+                    col_max = df[col].max(skipna=True)
+                    col_range = col_max - col_min if (col_min is not None and col_max is not None) else None
+                    col_mean = df[col].mean(skipna=True)
+                    col_var = df[col].var(skipna=True)
+                    col_std = df[col].std(skipna=True)
+
+                # اگر ستون از نوع تاریخ (datetime) باشد
+                elif np.issubdtype(df[col].dtype, np.datetime64):
+                    col_min = df[col].min(skipna=True)
+                    col_max = df[col].max(skipna=True)
+                    # دامنه به عنوان اختلاف زمان بین بیشینه و کمینه محاسبه می‌شود
+                    col_range = col_max - col_min if (col_min is not None and col_max is not None) else None
+                    # میانگین تاریخ محاسبه می‌شود؛ واریانس و انحراف معیار به عنوان None تعیین می‌شوند
+                    col_mean = df[col].mean(skipna=True)
+                    col_var = None
+                    col_std = None
+
+                # برای ستون‌های غیر عددی و غیر تاریخ
+                else:
+                    col_min = df[col].min()
+                    col_max = df[col].max()
+                    # بررسی اینکه آیا مقادیر مینیموم و ماکسیموم قابل محاسبه هستند و در صورت امکان دامنه محاسبه می‌شود
+                    try:
+                        col_range = col_max - col_min
+                    except Exception:
+                        col_range = None
+                    col_mean, col_var, col_std = None, None, None
+
+            except Exception as e:
+                col_min, col_max, col_range, col_mean, col_var, col_std = None, None, None, None, None, None
+
+            stats_rows.append({
+                "متغیر": col,
+                "تعداد یکتا": unique_count,
+                "گمشده": missing_count,
+                "مینیموم": col_min,
+                "ماکسیموم": col_max,
+                "دامنه": col_range,
+                "میانگین": col_mean,
+                "واریانس": col_var,
+                "انحراف معیار": col_std
+            })
+
+        stats_df = pd.DataFrame(stats_rows)
+        return stats_df
+
 
 class ParsianPreprocessingManager:
     """
@@ -640,6 +711,8 @@ class ParsianPreprocessingManager:
             df = self.preprocessor.remove_highly_correlated_features(df, threshold=self.correlation_threshold,
                                                                      class_column=self.label_column)
 
+        summary_stats_for_df = self.preprocessor.summary_stats_for_df(df)
+        logging.error(summary_stats_for_df)
         # ایمپیوت
         df_imputed = pd.DataFrame(self.preprocessor.imputer.fit_transform(df), columns=df.columns)
 
