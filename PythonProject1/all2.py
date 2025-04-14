@@ -1,6 +1,7 @@
 import logging
 import os
 
+import networkx as nx
 import pandas as pd
 from colorlog import ColoredFormatter
 from sklearn.decomposition import PCA
@@ -181,23 +182,29 @@ class Plot:
         plt.show()
 
     def plot_feature_importance(self, model, feature_names, top_n=20):
-        """
-        رسم نمودار اهمیت ویژگی‌ها بر اساس مدل LightGBM
-        :param model: مدل آموزش‌دیده (LightGBM)
-        :param feature_names: نام ویژگی‌ها (ستون‌های دیتافریم X)
-        :param top_n: تعداد ویژگی‌هایی که نمایش داده می‌شوند (پیش‌فرض: 20)
-        """
         importance = model.feature_importances_
         feature_importance = pd.DataFrame({'Feature': feature_names, 'Importance': importance})
         feature_importance = feature_importance.sort_values(by='Importance', ascending=False).head(top_n)
 
-        plt.figure(figsize=(12, 8))
-        sns.barplot(x='Importance', y='Feature', data=feature_importance, palette='viridis', hue='Feature', dodge=False)
+        plt.figure(figsize=(14, 12))  # افزایش ارتفاع نمودار
+
+        sns.barplot(
+            x='Importance',
+            y='Feature',
+            data=feature_importance,
+            palette='viridis',
+            hue='Feature',
+            dodge=False
+        )
+
         plt.title('Feature Importance (Top {})'.format(top_n), fontsize=16)
         plt.xlabel('Importance', fontsize=14)
         plt.ylabel('Features', fontsize=14)
-        plt.legend([], [], frameon=False)  # مخفی کردن legend اضافی
+        plt.yticks(fontsize=10)  # کاهش اندازه فونت ویژگی‌ها
+        plt.legend([], [], frameon=False)  # حذف legend اضافی
+        plt.tight_layout()  # تنظیم خودکار حاشیه‌ها
         plt.show()
+
 
     def plot_pca(self, X: pd.DataFrame, n_components: int = 2):
         """
@@ -283,6 +290,34 @@ class Plot:
         plt.xlabel('t-SNE Dimension 1')
         plt.ylabel('t-SNE Dimension 2')
         plt.grid(True)
+        plt.show()
+
+    def plot_pareto_front(self, front_costs):
+        """
+        نمایش نمودار پارتو از خروجی NSGA-II (cost vs boundary size)
+        """
+        plt.figure(figsize=(8, 6))
+        plt.scatter(front_costs[:, 0], front_costs[:, 1], c='red', label='Pareto Front')
+        plt.xlabel('Total Cost', fontsize=14)
+        plt.ylabel('Boundary Size', fontsize=14)
+        plt.title('Pareto Front - NSGA-II', fontsize=16)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    def plot_confusion_matrix(self, y_true, y_pred):
+        """
+        رسم ماتریس سردرگمی مدل نهایی (Confusion Matrix)
+        """
+        cm = confusion_matrix(y_true, y_pred)
+        labels = ['NEG', 'POS']
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(cm, annot=True, fmt='d', cmap="Blues", xticklabels=labels, yticklabels=labels)
+        plt.title("Confusion Matrix - Final Model", fontsize=14)
+        plt.xlabel("Predicted Label", fontsize=12)
+        plt.ylabel("True Label", fontsize=12)
+        plt.tight_layout()
         plt.show()
 
 
@@ -718,7 +753,7 @@ class ParsianPreprocessingManager:
         خروجی: (x_train, y_train, x_test, y_test, original_df)
         """
         logging.info("🔵 [Step1] شروع آماده‌سازی داده‌ها (Preprocessing).")
-        excluded_columns = [LoanDetail.REGION.key,LoanDetail.ID.key]
+        excluded_columns = [LoanDetail.REGION.key,LoanDetail.ID.key,LoanDetail.COMPANY_TYPE.key]
         # اگر تعداد رکوردها بسیار زیاد باشد، از روش chunk استفاده می‌کنیم
         if self.limit_records > 50_000:
             df = self.repository.fetch_loans_in_chunks(excluded_columns,chunk_size=100000)
@@ -1513,7 +1548,7 @@ if __name__ == "__main__":
     # visualizer.plot_pca_2d(x_train)
     # visualizer.plot_pca_3d(x_train)
     # visualizer.plot_tsne(x_train)
-    visualizer.draw_preprocessing_flowchart()
+    # visualizer.draw_preprocessing_flowchart()
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
@@ -1542,6 +1577,8 @@ if __name__ == "__main__":
     threshold_nsgaii.optimize()
 
     solutions, objectives = threshold_nsgaii.get_pareto_front()
+    visualizer.plot_pareto_front(threshold_nsgaii.front_costs)
+
     logging.info("🔹 راه‌حل‌های پارتو (alpha,beta) و مقدار اهداف (cost,boundary):")
     for i, sol in enumerate(solutions):
         alpha, beta = sol
@@ -1586,6 +1623,8 @@ if __name__ == "__main__":
                                        cost_matrix=all_costs  # اگر هزینه بخواهیم
                                        )
     results = final_eval.evaluate_metrics()
+    visualizer.plot_confusion_matrix(y_test.values, decisions_updated)
+
     logging.info("🔹 نتایج نهایی مدل:")
     for k, v in results.items():
         logging.info(f"  {k}: {v}")
