@@ -47,6 +47,43 @@ class Plot:
     def __init__(self) -> None:
         pass
 
+    def draw_preprocessing_flowchart(self, output_path="flowchart_standardize_select.png"):
+        G = nx.DiGraph()
+
+        G.add_node("Extract Data\n(استخراج داده‌ها)")
+        G.add_node("Data Cleaning\n(پاکسازی داده‌ها)")
+        G.add_node("Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)")
+        G.add_node("Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)")
+        G.add_node("Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)")
+        G.add_node("Correlation Analysis\n(تحلیل همبستگی)")
+        G.add_node("Remove Redundant Features\n(حذف ویژگی‌های تکراری)")
+        G.add_node("Feature Selection\n(انتخاب ویژگی‌های کلیدی)")
+        G.add_node("Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")
+
+        G.add_edges_from([
+            ("Extract Data\n(استخراج داده‌ها)", "Data Cleaning\n(پاکسازی داده‌ها)"),
+            ("Data Cleaning\n(پاکسازی داده‌ها)", "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)"),
+            ("Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)",
+             "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)"),
+            ("Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)",
+             "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)"),
+            ("Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)",
+             "Correlation Analysis\n(تحلیل همبستگی)"),
+            ("Correlation Analysis\n(تحلیل همبستگی)", "Remove Redundant Features\n(حذف ویژگی‌های تکراری)"),
+            ("Remove Redundant Features\n(حذف ویژگی‌های تکراری)", "Feature Selection\n(انتخاب ویژگی‌های کلیدی)"),
+            ("Feature Selection\n(انتخاب ویژگی‌های کلیدی)",
+             "Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")
+        ])
+
+        plt.figure(figsize=(12, 8))
+        pos = nx.spring_layout(G, seed=42)
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=3500, font_size=10,
+                font_weight='bold', arrows=True, arrowstyle='->', arrowsize=20)
+        plt.title("Flowchart: Standardization & Feature Selection Process", fontsize=14, fontweight='bold')
+
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.show()
+
     def plot1(self, probabilities: np.ndarray, bins: int = 100, figsize: Tuple[int, int] = (10, 6),
               xlim: Tuple[float, float] = None) -> None:
         """
@@ -681,7 +718,7 @@ class ParsianPreprocessingManager:
         خروجی: (x_train, y_train, x_test, y_test, original_df)
         """
         logging.info("🔵 [Step1] شروع آماده‌سازی داده‌ها (Preprocessing).")
-        excluded_columns = [LoanDetail.REGION.key]
+        excluded_columns = [LoanDetail.REGION.key,LoanDetail.ID.key]
         # اگر تعداد رکوردها بسیار زیاد باشد، از روش chunk استفاده می‌کنیم
         if self.limit_records > 50_000:
             df = self.repository.fetch_loans_in_chunks(excluded_columns,chunk_size=100000)
@@ -1463,7 +1500,7 @@ if __name__ == "__main__":
     prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=700_000, label_column="LOAN_STATUS",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
-                                               correlation_threshold=0.9, do_balance=True, test_size=0.2,
+                                               correlation_threshold=0.95, do_balance=True, test_size=0.2,
                                                random_state=42)
 
     x_train, y_train, x_test, y_test, original_df = prep_manager.step1_process_data()
@@ -1476,6 +1513,7 @@ if __name__ == "__main__":
     # visualizer.plot_pca_2d(x_train)
     # visualizer.plot_pca_3d(x_train)
     # visualizer.plot_tsne(x_train)
+    visualizer.draw_preprocessing_flowchart()
 
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
