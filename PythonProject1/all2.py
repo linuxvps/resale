@@ -1535,7 +1535,7 @@ if __name__ == "__main__":
     bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="bagging")
     bnd_resolver.fit_bnd_model()
 
-    # اعمال مدل استکینگ روی نمونه‌های مرزی
+    # اعمال مدل روی نمونه‌های مرزی
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
 
     logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
