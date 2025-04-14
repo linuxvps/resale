@@ -5,6 +5,7 @@ import pandas as pd
 from colorlog import ColoredFormatter
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from sklearn.tree import DecisionTreeClassifier
 # ------------------------------------------------------------
 # بخش مربوط به SQLAlchemy برای اتصال به دیتابیس و تعریف انتیتی
 # ------------------------------------------------------------
@@ -1076,7 +1077,7 @@ class ParsianThreeWayDecision:
 # گام ششم: تصمیم‌گیری نهایی روی نمونه‌های BND
 #          (مثلاً با استکینگ یا مدل کمکی دیگر)
 ###########################################
-from sklearn.ensemble import StackingClassifier, RandomForestClassifier
+from sklearn.ensemble import StackingClassifier, RandomForestClassifier, BaggingClassifier
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 
@@ -1084,15 +1085,20 @@ from xgboost import XGBClassifier
 class ParsianBNDResolver:
     """
     این کلاس نمونه‌هایی را که در گام پنجم در ناحیه BND واقع شده‌اند،
-    شناسایی و با یک مدل اضافی (مثلاً استکینگ) تصمیم قطعی (POS یا NEG) می‌گیرد.
+    شناسایی و با یک مدل اضافی، تصمیم قطعی (POS یا NEG) می‌گیرد.
+
+    در این پژوهش، به منظور تعیین تصمیم‌های نهایی برای نمونه‌های مرزی،
+    از دو رویکرد یادگیری جمعی به صورت مدل‌های Stacking و Bagging استفاده شده است.
+    این انتخاب به پژوهشگر امکان می‌دهد تا در شرایط مختلف داده،
+    بهترین روش تکمیلی جهت کاهش عدم قطعیت در تصمیم‌گیری را به کار گیرد.
     """
 
-    def __init__(self, x_train_all: pd.DataFrame, y_train_all: pd.Series, model_type="stacking"):
+    def __init__(self, x_train_all: pd.DataFrame, y_train_all: pd.Series, model_type="bagging"):
         """
         پارامترها:
-          - x_train_all, y_train_all: داده‌های آموزش اصلی (یا داده‌های مرزی خاص؟)
+          - x_train_all, y_train_all: داده‌های آموزش اصلی یا داده‌های مرزی
           - model_type: نوع مدلی که می‌خواهیم برای تشخیص نمونه‌های مرزی به‌کار بریم
-                       (اینجا مثلاً "stacking" یا "bagging" یا ...)
+                       (برای مثال "stacking" یا "bagging")
         """
         self.x_train_all = x_train_all
         self.y_train_all = y_train_all
@@ -1101,48 +1107,69 @@ class ParsianBNDResolver:
 
     def fit_bnd_model(self):
         """
-        آموزش مدل استکینگ یا هر مدل دیگر بر روی کل دادهٔ آموزش.
-        توجه: می‌توانیم بنا به نیاز، فقط نمونه‌های دشوار یا بخشی از دیتاست را استفاده کنیم.
+        در این بخش، بر اساس نوع انتخاب‌شده (Stacking یا Bagging)، مدل تکمیلی جهت
+        تصمیم‌گیری برای نمونه‌های مرزی آموزش داده می‌شود.
+
+        - در صورت انتخاب مدل Stacking، چندین مدل پایه (مانند Random Forest و XGBoost)
+          به همراه یک مدل متا (مانند Logistic Regression) به‌صورت یک چارچوب یادگیری
+          چندلایه آموزش می‌داده می‌شوند.
+        - در صورت انتخاب مدل Bagging، از یک مدل پایه مانند درخت تصمیم به‌عنوان
+          الگوریتم یادگیری جمعی استفاده شده و با بهره‌گیری از رویکرد Bagging، توان پیش‌بینی
+          در نمونه‌های مرزی ارتقا می‌یابد.
+
+        این رویکرد یادگیری جمعی با هدف بهبود قابلیت تعمیم مدل و کاهش خطاهای ناشی از
+        تصمیم‌گیری در نواحی نامطمئن (Boundary) به‌کار گرفته شده است.
         """
         if self.model_type.lower() == "stacking":
-            # چندین مدل پایه + متا
+            # تنظیم چارچوب مدل Stacking: چندین مدل پایه به همراه یک متا مدل
             base_estimators = [("rf", RandomForestClassifier(n_estimators=50, random_state=42)),
                                ("xgb", XGBClassifier(eval_metric="logloss", random_state=42))]
             meta_estimator = LogisticRegression(max_iter=1000, random_state=42)
             self.classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_estimator, cv=5,
                                                  n_jobs=-1)
+        elif self.model_type.lower() == "bagging":
+            # تنظیم چارچوب مدل Bagging: استفاده از یک مدل پایه (مثلاً درخت تصمیم)
+            # به عنوان الگوریتم یادگیری جمعی جهت افزایش پایداری و کاهش واریانس پیش‌بینی‌ها
+            base_estimator = DecisionTreeClassifier(random_state=42)
+            self.classifier = BaggingClassifier(estimator=base_estimator, n_estimators=10,
+                                                random_state=42, n_jobs=-1)
         else:
-            # می‌توانید روش‌های دیگر را اضافه کنید
-            raise ValueError("فقط مدل 'stacking' پیاده شده است.")
+            raise ValueError("فعلاً فقط مدل‌های 'stacking' و 'bagging' پشتیبانی می‌شوند.")
 
-        logging.info("🔵 در حال آموزش مدل BNDResolver (استکینگ)...")
+        logging.info(f"🔵 در حال آموزش مدل BNDResolver ({self.model_type.capitalize()})...")
         self.classifier.fit(self.x_train_all, self.y_train_all)
         logging.info("✅ آموزش مدل BNDResolver کامل شد.")
 
     def resolve_bnd_samples(self, x_test: pd.DataFrame, decisions_final: np.ndarray):
         """
-        پارامترها:
-         - x_test: داده‌های تست کامل
-         - decisions_final: برچسب تصمیم گام پنجم (POS=1, NEG=0, BND=-1)
+        این متد به‌منظور به‌روزرسانی تصمیم‌های نهایی برای نمونه‌هایی که در ناحیه مرزی (BND)
+        قرار گرفته‌اند، اجرا می‌شود. از مدل آموزش‌دیده جهت تعیین طبقه (POS یا NEG) برای
+        نمونه‌های مرزی استفاده می‌شود.
+
+        ورودی‌ها:
+          - x_test: داده‌های آزمون کامل
+          - decisions_final: برچسب‌های اولیه تصمیم (POS=1, NEG=0, BND=-1)
+
         خروجی:
-         - decisions_updated: آرایه‌ی تصمیم نهایی که BNDها را نیز به POS یا NEG تبدیل می‌کند.
+          - decisions_updated: آرایه نهایی تصمیم‌ها که نمونه‌های مرزی نیز به یکی از دو کلاس
+            قطعی (POS یا NEG) تخصیص یافته‌اند.
         """
         bnd_indices = np.where(decisions_final == -1)[0]
         logging.info(f"🔵 تعداد نمونه‌های BND: {len(bnd_indices)}")
 
         if len(bnd_indices) == 0:
             logging.info("هیچ نمونه مرزی وجود ندارد. تغییری اعمال نمی‌شود.")
-            return decisions_final  # همان قبلی
+            return decisions_final
 
-        # استخراج نمونه‌های BND از x_test
+        # استخراج نمونه‌های مربوط به منطقه مرزی از مجموعه داده‌های آزمون
         x_test_bnd = x_test.iloc[bnd_indices]
-        # پیش‌بینی مدل ثانویه
+        # پیش‌بینی طبقه نهایی برای این نمونه‌ها با استفاده از مدل تکمیلی
         y_pred_bnd = self.classifier.predict(x_test_bnd)
 
-        # به‌روزرسانی تصمیم نهایی
+        # به‌روزرسانی برچسب‌های تصمیم نهایی
         decisions_updated = decisions_final.copy()
         for idx, pred in zip(bnd_indices, y_pred_bnd):
-            decisions_updated[idx] = pred  # pred=0 => NEG, pred=1 => POS
+            decisions_updated[idx] = pred  # تعیین نهایی به ازای هر نمونه (0 یا 1)
         return decisions_updated
 
 
@@ -1505,7 +1532,7 @@ if __name__ == "__main__":
                     f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
     # 6) گام ششم: تصمیم‌گیری روی BNDها
-    bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="stacking")
+    bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="bagging")
     bnd_resolver.fit_bnd_model()
 
     # اعمال مدل استکینگ روی نمونه‌های مرزی
