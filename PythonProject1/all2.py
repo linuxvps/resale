@@ -554,6 +554,7 @@ from sklearn.feature_selection import RFECV
 from lightgbm import LGBMClassifier
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import StandardScaler
 
 
 class LoanPreprocessor:
@@ -568,6 +569,22 @@ class LoanPreprocessor:
 
     def __init__(self, imputation_strategy="mean"):
         self.imputer = SimpleImputer(strategy=imputation_strategy)
+
+
+    def standardize_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        این تابع تمامی ستون‌های عددی را به کمک تکنیک Z-score (StandardScaler)
+        استانداردسازی می‌کند، به‌طوری که میانگین برابر صفر و انحراف معیار برابر یک باشد.
+
+        :param df: دیتافریم ورودی
+        :return: دیتافریم استانداردشده
+        """
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        scaler = StandardScaler()
+        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        return df
+
+
 
     def convert_labels(self, df, label_column="status"):
         logging.info(f"[LoanPreprocessor] تبدیل برچسب: {label_column}")
@@ -788,6 +805,8 @@ class ParsianPreprocessingManager:
         logging.error(summary_stats_for_df)
         # ایمپیوت
         df_imputed = pd.DataFrame(self.preprocessor.imputer.fit_transform(df), columns=df.columns)
+
+        df_imputed = self.preprocessor.standardize_numeric_columns(df_imputed)
 
         # تفکیک X,y
         X = df_imputed.drop(columns=[self.label_column])
