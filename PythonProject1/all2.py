@@ -4,6 +4,7 @@ import os
 import networkx as nx
 import pandas as pd
 from colorlog import ColoredFormatter
+from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.tree import DecisionTreeClassifier
@@ -569,21 +570,26 @@ class LoanPreprocessor:
 
     def __init__(self, imputation_strategy="mean"):
         self.imputer = SimpleImputer(strategy=imputation_strategy)
+        self.scaler = StandardScaler()  # برای استانداردسازی ثابت
 
-
-    def standardize_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+    def standardize_numeric_columns(self, df: pd.DataFrame, exclude_cols: list = None,
+                                    fit: bool = True) -> pd.DataFrame:
         """
-        این تابع تمامی ستون‌های عددی را به کمک تکنیک Z-score (StandardScaler)
-        استانداردسازی می‌کند، به‌طوری که میانگین برابر صفر و انحراف معیار برابر یک باشد.
-
+        ستون‌های عددی را به کمک Z‑score استاندارد می‌کند.
         :param df: دیتافریم ورودی
+        :param exclude_cols: لیستی از ستون‌هایی که نباید استاندارد شوند (مثل برچسب)
+        :param fit: اگر True باشد، scaler را با داده‌های df می‌فیت می‌کند؛
+                    در غیر این صورت فقط transform انجام می‌دهد.
         :return: دیتافریم استانداردشده
         """
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        scaler = StandardScaler()
-        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        if exclude_cols:
+            numeric_cols = [c for c in numeric_cols if c not in exclude_cols]
+        if fit:
+            df[numeric_cols] = self.scaler.fit_transform(df[numeric_cols])
+        else:
+            df[numeric_cols] = self.scaler.transform(df[numeric_cols])
         return df
-
 
 
     def convert_labels(self, df, label_column="status"):
@@ -804,9 +810,18 @@ class ParsianPreprocessingManager:
         summary_stats_for_df = self.preprocessor.summary_stats_for_df(df)
         logging.error(summary_stats_for_df)
         # ایمپیوت
+        # حذف ستون‌هایی که همه مقدارشون NaN هست
+        all_nan_cols = df.columns[df.isna().all()].tolist()
+        if all_nan_cols:
+            logging.warning(f"حذف ستون‌های همه NaN: {all_nan_cols}")
+            df.drop(columns=all_nan_cols, inplace=True)
+
         df_imputed = pd.DataFrame(self.preprocessor.imputer.fit_transform(df), columns=df.columns)
 
-        df_imputed = self.preprocessor.standardize_numeric_columns(df_imputed)
+        X = df_imputed.drop(columns=[self.label_column])
+        y = df_imputed[self.label_column].astype(int)
+
+        X = self.preprocessor.standardize_numeric_columns(X, exclude_cols=[self.label_column], fit=True)
 
         # تفکیک X,y
         X = df_imputed.drop(columns=[self.label_column])
@@ -1551,7 +1566,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=700_000, label_column="LOAN_STATUS",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=40_000, label_column="LOAN_STATUS",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.95, do_balance=True, test_size=0.2,
