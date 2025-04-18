@@ -1553,7 +1553,6 @@ class ParsianMethodComparison:
         logging.warning("\n" + str(self.comparison_table))
         return self.comparison_table
 
-
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
 ###########################################
