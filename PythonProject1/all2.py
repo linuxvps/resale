@@ -49,6 +49,40 @@ class Plot:
     def __init__(self) -> None:
         pass
 
+    def plot_default_prob_hist(self,           # ← اضافه شدن self
+                               probs,
+                               u, v,
+                               bins=100,
+                               figsize=(12, 6),
+                               log_y=True,
+                               title='Distribution of Default Probabilities with Thresholds (u, v)'):
+        """
+        رسم هیستوگرام احتمال نکول به‌همراه خطوط آستانهٔ u و v
+        """
+        plt.figure(figsize=figsize)
+
+        n, bins_edges, _ = plt.hist(probs,
+                                    bins=bins,
+                                    color='skyblue',
+                                    edgecolor='black',
+                                    alpha=0.7)
+
+        mean_val = np.mean(probs)
+        plt.axvline(mean_val, color='red', linestyle='--', label=f'Mean = {mean_val:.2f}')
+        plt.axvline(u,        color='green',  linewidth=2, label=f'u (POS) = {u:.3f}')
+        plt.axvline(v,        color='orange', linewidth=2, label=f'v (NEG) = {v:.3f}')
+
+        if log_y:
+            plt.yscale('log')
+
+        plt.title(title)
+        plt.xlabel('Probability')
+        plt.ylabel('Frequency' + (' (log scale)' if log_y else ''))
+        plt.legend()
+        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.tight_layout()
+        plt.show()
+
     def draw_preprocessing_flowchart(self, output_path="flowchart_standardize_select.png"):
         G = nx.DiGraph()
 
@@ -141,41 +175,53 @@ class Plot:
         plt.tight_layout()
         plt.show()
 
-    def plot_with_thresholds(self, probabilities: np.ndarray, alpha: float, beta: float, bins: int = 100,
-                             figsize: Tuple[int, int] = (12, 6), xlim: Tuple[float, float] = None) -> None:
+    def plot_with_thresholds(self,
+                             probabilities: np.ndarray,
+                             u: float,            # ← قبلاً alpha بود
+                             v: float,            # ← قبلاً beta بود
+                             bins: int = 100,
+                             figsize: Tuple[int, int] = (12, 6),
+                             xlim: Tuple[float, float] = None) -> None:
         """
-        رسم نمودار احتمال‌ها با اضافه کردن خطوط آستانه alpha و beta.
-
-        :param probabilities: آرایه numpy شامل احتمال‌ها.
-        :param alpha: مقدار آلفا (آستانه مثبت).
-        :param beta: مقدار بتا (آستانه منفی).
-        :param bins: تعداد بخش‌های هیستوگرام (پیش‌فرض 100).
-        :param figsize: اندازه شکل نمودار (پیش‌فرض (12, 6)).
-        :param xlim: محدوده محور افقی (مثلاً (0, 0.5) برای بزرگنمایی داده‌های نزدیک به صفر).
+        رسم هیستوگرام احتمال نکول به‌همراه خطوط u و v (آستانه‌های بهینهٔ جهانی).
         """
         plt.figure(figsize=figsize)
 
-        # رسم هیستوگرام
-        n, bins_array, patches = plt.hist(probabilities, bins=bins, edgecolor='black', alpha=0.7, color='skyblue')
+        # ۱) هیستوگرام احتمال‌ها
+        n, bins_array, patches = plt.hist(probabilities,
+                                          bins=bins,
+                                          edgecolor='black',
+                                          alpha=0.7,
+                                          color='skyblue')
 
-        # محاسبه و نمایش خط میانگین
+        # ۲) خط میانگین
         mean_val = np.mean(probabilities)
-        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2, label=f'Mean = {mean_val:.2f}')
+        plt.axvline(mean_val,
+                    color='red',
+                    linestyle='dashed',
+                    linewidth=2,
+                    label=f'Mean = {mean_val:.2f}')
 
-        # رسم خطوط alpha و beta
-        plt.axvline(alpha, color='green', linestyle='-', linewidth=3, label=f'Alpha (POS) = {alpha:.3f}')
-        plt.axvline(beta, color='orange', linestyle='-', linewidth=3, label=f'Beta (NEG) = {beta:.3f}')
+        # ۳) خطوط u و v  (به‌ترتیب تصمیمِ POS و NEGِ سراسری)
+        plt.axvline(u,
+                    color='green',
+                    linestyle='-',
+                    linewidth=3,
+                    label=f'u (POS) = {u:.3f}')
+        plt.axvline(v,
+                    color='orange',
+                    linestyle='-',
+                    linewidth=3,
+                    label=f'v (NEG) = {v:.3f}')
 
-        # افزودن جزئیات به نمودار
-        plt.title("Distribution of Default Probabilities with Thresholds", fontsize=16)
+        # جزئیات نمودار
+        plt.title("Distribution of Default Probabilities with Global Thresholds (u, v)",
+                  fontsize=16)
         plt.xlabel("Probability", fontsize=14)
         plt.ylabel("Frequency", fontsize=14)
-        plt.xticks(fontsize=12)
-        plt.yticks(fontsize=12)
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend(fontsize=12)
 
-        # تنظیم محدوده محور افقی
         if xlim:
             plt.xlim(xlim)
 
@@ -973,30 +1019,29 @@ class ParsianThresholdNSGA2:
         self.front_costs = None  # مقدار اهداف در پارتو
         self.problem_instance = None
 
-    def _decision_cost_for_sample(self, i, alpha, beta):
+    def _decision_cost_for_sample(self, i: int, u: float, v: float) -> float:
         """
-        محاسبه هزینه تصمیم برای نمونه iام.
-        سه حالت:
-         - اگر p_i >= alpha => POS
-         - اگر p_i <= beta => NEG
-         - در غیر این صورت => BND (اینجا هزینه را می‌توان سفارشی کرد.)
+        فرمول کاملِ مقاله برای محاسبهٔ هزینهٔ تصمیم یک رکورد.
+        ➊ ابتدا α_i و β_i را با u , v و ضرایب λ محاسبه می‌کنیم.
+        ➋ سپس تصمیم (POS / NEG / BND) را پیدا کرده و هزینه را برمی‌گردانیم.
         """
-        p = self.probabilities_test[i]
-        y_true = self.true_labels[i]  # 0 یا 1
-        costs = self.cost_matrix[i]
+        p_i = self.probabilities_test[i]
+        y_i = self.true_labels[i]  # 0 یا 1
+        lam = self.cost_matrix[i]  # {'PP','PN','NP','NN'}
 
-        if p >= alpha:
-            # تصمیم => نکول
-            return costs["PP"] if y_true == 1 else costs["PN"]
-        elif p <= beta:
-            # تصمیم => غیرنکول
-            return costs["NP"] if y_true == 1 else costs["NN"]
-        else:
-            # مرزی
-            # اگر بخواهید هزینه مرزی را هم اضافه کنید، باید آن را در cost_matrix[i] گنجانید
-            # مثلاً costs["BP"], costs["BN"] ...
-            # در اینجا برای سادگی 0 در نظر می‌گیریم
-            return 0.0
+        # ---- آستانه‌های نمونه‑ای (α_i , β_i) همان معادلات مقاله ----
+        alpha_i = (lam["PN"] - v * lam["PN"]) / ((lam["PN"] - v * lam["PN"]) + (u * lam["NP"]))
+        beta_i = (v * lam["PN"]) / ((v * lam["PN"]) + (lam["NP"] - u * lam["NP"]))
+
+        # ---- تصمیم سه‑گانه ----
+        if p_i >= alpha_i:  # POS
+            return lam["PP"] if y_i == 1 else lam["PN"]
+        elif p_i <= beta_i:  # NEG
+            return lam["NP"] if y_i == 1 else lam["NN"]
+        else:  # BND  (هزینهٔ مرزی طبق مقاله λ_BP , λ_BN)
+            bp_cost = 0.25 * lam["NP"]  # λ_BP = 0.25 λ_NP
+            bn_cost = 0.25 * lam["PN"]  # λ_BN = 0.25 λ_PN
+            return bp_cost if y_i == 1 else bn_cost
 
     def _boundary_count_for_solution(self, alpha, beta):
         """
@@ -1106,39 +1151,39 @@ class ParsianThresholdNSGA2:
 
     def get_final_solution(self):
         """
-        روی جبههٔ پارتو، راه‌حلی انتخاب می‌شود که:
-            1) bnd_size > 0  (ناحیه مرزی خالی نباشد)
-            2) BalancedAccuracy بیشینه شود.
+        راه‌حل نهایی همان عضوی از جبههٔ پارتو است که:
+           •  نسبت BND ≤ 5٪ کل داده
+           •  بیشترین Balanced‑Accuracy را دارد
+           •  (در صورت تساوی) کمینهٔ Total‑Cost را دارد
         """
-        if self.best_solutions is None: raise RuntimeError("ابتدا optimize را اجرا کنید.")
-        best_balacc, best_idx = -1, 0
+        if self.best_solutions is None:
+            raise RuntimeError("ابتدا optimize را اجرا کنید.")
+
+        best_idx, best_balacc, best_cost = None, -1.0, np.inf
 
         for idx, (u, v) in enumerate(self.best_solutions):
-            # --- محاسبه سریع BalancedAccuracy برای همان (u,v) ---
             preds = []
-            p = self.probabilities_test
-            for i in range(len(p)):
+            for i in range(len(self.probabilities_test)):
+                p_i = self.probabilities_test[i]
                 lam = self.cost_matrix[i]
                 alpha = (lam["PN"] - v * lam["PN"]) / ((lam["PN"] - v * lam["PN"]) + (u * lam["NP"]))
                 beta = (v * lam["PN"]) / ((v * lam["PN"]) + (lam["NP"] - u * lam["NP"]))
-                if p[i] >= alpha:
-                    preds.append(1)
-                elif p[i] <= beta:
-                    preds.append(0)
-                else:
-                    preds.append(-1)  # مرزی
-            preds = np.array(preds)
-            # همهٔ مرزی‌ها را «منفی» فرض می‌کنیم برای تخمین سریع
-            preds[preds == -1] = 0
-            cm = confusion_matrix(self.true_labels, preds)
-            TN, FP, FN, TP = cm.ravel()
-            balacc = 0.5 * ((TP / (TP + FN or 1)) + (TN / (TN + FP or 1)))
+                preds.append(1 if p_i >= alpha else (0 if p_i <= beta else -1))
 
-            if self.front_costs[idx, 1] > 0 and balacc > best_balacc:
-                best_balacc, best_idx = balacc, idx
+            preds_arr = np.array(preds)
+            bnd_ratio = np.mean(preds_arr == -1)
+            if bnd_ratio > 0.05:  # شرط مقاله
+                continue
+
+            preds_arr[preds_arr == -1] = 0  # برآورد سریع برای BalAcc
+            cm = confusion_matrix(self.true_labels, preds_arr)
+            TN, FP, FN, TP = cm.ravel()
+            balacc = 0.5 * ((TP / (TP + FN + 1e-9)) + (TN / (TN + FP + 1e-9)))
+
+            if (balacc > best_balacc) or (np.isclose(balacc, best_balacc) and self.front_costs[idx, 0] < best_cost):
+                best_idx, best_balacc, best_cost = idx, balacc, self.front_costs[idx, 0]
 
         return self.best_solutions[best_idx], self.front_costs[best_idx]
-
 
 
 ###########################################
@@ -1235,11 +1280,27 @@ class ParsianBNDResolver:
             self.classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_estimator, cv=5,
                                                  n_jobs=-1)
         elif self.model_type.lower() == "bagging":
-            # تنظیم چارچوب مدل Bagging: استفاده از یک مدل پایه (مثلاً درخت تصمیم)
-            # به عنوان الگوریتم یادگیری جمعی جهت افزایش پایداری و کاهش واریانس پیش‌بینی‌ها
-            base_estimator = DecisionTreeClassifier(random_state=42)
-            self.classifier = BaggingClassifier(estimator=base_estimator, n_estimators=10,
-                                                random_state=42, n_jobs=-1)
+            base_estimator = DecisionTreeClassifier(
+                criterion="gini",
+                max_depth=None,  # اجازهٔ رشد کامل
+                min_samples_leaf=2,  # جلوگیری از over‑fitting ریز
+                class_weight="balanced",  # جبران کلاس اقلیت
+                random_state=42
+            )
+
+            # ۲) BaggingClassifier با ۲۰۰ درخت، بوت‌استرپ هم روی نمونه و هم روی ویژگی‌ها
+            self.classifier = BaggingClassifier(
+                estimator=base_estimator,
+                n_estimators=200,  # تعداد کیف‌های زیادتر
+                max_samples=0.8,  # ۸۰٪ نمونه‌ها در هر کیف
+                max_features=0.8,  # ۸۰٪ ویژگی‌ها در هر کیف
+                bootstrap=True,
+                bootstrap_features=True,  # بوت‌استرپ ویژگی‌ها برای متنوع‌سازی بیشتر
+                oob_score=True,  # برآورد خطای خارج‌از-کیف
+                n_jobs=-1,
+                random_state=42,
+                verbose=0
+            )
         else:
             raise ValueError("فعلاً فقط مدل‌های 'stacking' و 'bagging' پشتیبانی می‌شوند.")
 
@@ -1629,6 +1690,14 @@ if __name__ == "__main__":
         f"🔹 بهترین جفت ضریب‌ها: u*={best_u:.3f}, v*={best_v:.3f}  →  "
         f"cost={best_obj[0]:,.2f},  boundary={best_obj[1]:.3f}"
     )
+
+    logger.warning("11111111111111111111111111111111111111111111")
+    logger.warning(f"best_u: {best_u}, best_v: {best_v}")
+    logger.warning("22222222222222222222222222222222222222222222")
+
+    visualizer.plot_with_thresholds(probabilities_test, u=best_u, v=best_v)
+
+    visualizer.plot_default_prob_hist(probabilities_test,best_u,best_v)
 
     logging.info("گام چهارم (NSGA‑II چندهدفه) با موفقیت به پایان رسید.")
 
