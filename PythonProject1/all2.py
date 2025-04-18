@@ -892,33 +892,26 @@ class ParsianLossMatrix:
 
     def compute_costs(self):
         """
-        محاسبه زیان برای هر رکورد در df_test.
-        در این مثال، فرمول‌ها را بدین صورت تعریف می‌کنیم:
-          λ_PP = 0
-          λ_NN = 0
-          λ_PN = interest_amount
-          λ_NP = approval_amount + interest_amount
-          (اگر بخواهیم λ_BP و λ_BN هم داشته باشیم، می‌توانیم اضافه کنیم)
+        λ_PP = λ_NN = 0
+        λ_PN = interest          (زیان پذیرش اشتباهِ غیرنکول)
+        λ_NP = principal + interest   (زیان ردِ اشتباهِ نکول)
+        λ_BP = u·λ_NP , λ_BN = v·λ_PN  ⇐ داخل NSGA-II محاسبه می‌شود
         """
         if self.approval_col not in self.df_test.columns or self.interest_col not in self.df_test.columns:
             raise ValueError("ستون‌های مالی برای محاسبه زیان موجود نیست.")
 
+        self.cost_matrix.clear()
         for i in range(len(self.df_test)):
             principal = float(self.df_test.loc[i, self.approval_col] or 0.0)
             interest = float(self.df_test.loc[i, self.interest_col] or 0.0)
 
-            cost_pp = 0.0
-            cost_nn = 0.0
-            cost_pn = interest  # پذیرش اشتباه نمونه‌ای که واقعاً غیرنکول است
-            cost_np = principal + round(interest * principal) # رد اشتباه نمونه‌ای که واقعاً نکول است
+            self.cost_matrix.append({
+                "PP": 0.0,
+                "NN": 0.0,
+                "PN": interest,
+                "NP": principal + interest  # نه ضرب!  جمع طبق مقاله
+            })
 
-            # اگر بخواهیم هزینه تصمیم مرزی اضافه کنیم:
-            # cost_bp = ...
-            # cost_bn = ...
-
-            self.cost_matrix.append({"PP": cost_pp, "NN": cost_nn, "PN": cost_pn, "NP": cost_np  # "BP": cost_bp,
-                                     # "BN": cost_bn
-                                     })
 
     def get_cost_for_sample(self, index: int):
         """
@@ -1038,38 +1031,50 @@ class ParsianThresholdNSGA2:
 
         def _evaluate(self, X, out, *args, **kwargs):
             """
-            X آرایه‌ای شکل (N, 2) است که در هر سطر:
-              X[i,0] = alpha
-              X[i,1] = beta
-            باید 2 هدف محاسبه شود: total_cost, boundary_size
-            همچنین یک محدودیت: alpha >= beta => beta - alpha <= 0
+            اکنون برای هر راه‌حل (u,v) آستانه‌های αᵢ,βᵢ را «برای تک‌تک رکوردها» می‌سازیم.
+            λ_BP = u·λ_NP , λ_BN = v·λ_PN  (فرمول 4 مقاله)
+            αᵢ , βᵢ طبق فرمول‌های (2) و (3) مقاله محاسبه می‌شود.
+            objective1 = مجموع زیانِ سه‌‑راهه
+            objective2 = Σ(αᵢ − βᵢ)  (اندازه فضای مرزی)
+            constraint : u+v ≤ 1
             """
-            n_solutions = X.shape[0]
-            f1 = np.zeros(n_solutions)  # هزینه
-            f2 = np.zeros(n_solutions)  # اندازه مرزی
+            n_sol = X.shape[0]
+            f1 = np.zeros(n_sol)  # total cost
+            f2 = np.zeros(n_sol)  # boundary size
+            g = np.zeros((n_sol, 1))  # u+v -1 ≤ 0
 
-            for i_sol in range(n_solutions):
-                alpha = X[i_sol, 0]
-                beta = X[i_sol, 1]
+            p = self.outer.probabilities_test
+            y_true = self.outer.true_labels
+            costs = self.outer.cost_matrix
 
-                # محاسبه هزینه کل
-                total_cost = 0.0
-                for i_sample in range(len(self.outer.probabilities_test)):
-                    c = self.outer._decision_cost_for_sample(i_sample, alpha, beta)
-                    total_cost += c
+            for k in range(n_sol):
+                u, v = X[k]
+                tot_cost, bnd_size = 0.0, 0.0
 
-                # محاسبه اندازه مرزی
-                boundary_size = self.outer._boundary_count_for_solution(alpha, beta)
+                for i in range(len(p)):
+                    lam = costs[i]
+                    lam_BP = u * lam["NP"]
+                    lam_BN = v * lam["PN"]
 
-                f1[i_sol] = total_cost
-                f2[i_sol] = boundary_size
+                    alpha = (lam["PN"] - lam_BN) / ((lam["PN"] - lam_BN) + (lam_BP - lam["PP"]))
+                    beta = (lam_BN - lam["NN"]) / ((lam_BN - lam["NN"]) + (lam["NP"] - lam_BP))
 
-            # محدودیت: alpha >= beta => (beta - alpha) <= 0
-            g = np.zeros((n_solutions, 1))
-            g[:, 0] = X[:, 1] - X[:, 0]  # beta - alpha => باید <= 0
+                    # decision + cost
+                    if p[i] >= alpha:  # POS
+                        tot_cost += lam["PP"] if y_true[i] == 1 else lam["PN"]
+                    elif p[i] <= beta:  # NEG
+                        tot_cost += lam["NP"] if y_true[i] == 1 else lam["NN"]
+                    else:  # BND
+                        tot_cost += lam_BP if y_true[i] == 1 else lam_BN
+                        bnd_size += (alpha - beta)
+
+                f1[k] = tot_cost
+                f2[k] = bnd_size
+                g[k, 0] = u + v - 1.0  # همان قیود (6) مقاله
 
             out["F"] = np.column_stack([f1, f2])
             out["G"] = g
+
 
     def optimize(self):
         """
@@ -1101,17 +1106,39 @@ class ParsianThresholdNSGA2:
 
     def get_final_solution(self):
         """
-        از میان راه‌حل‌های پارتو، راه‌حل نهایی (α, β) را برمی‌گرداند که تعداد نمونه‌های ناحیه مرزی را به حداقل رسانده است.
-        خروجی: (final_solution, final_objectives)
-          final_solution: آرایه [alpha, beta]
-          final_objectives: آرایه [total_cost, boundary_size] مربوط به راه‌حل نهایی
+        روی جبههٔ پارتو، راه‌حلی انتخاب می‌شود که:
+            1) bnd_size > 0  (ناحیه مرزی خالی نباشد)
+            2) BalancedAccuracy بیشینه شود.
         """
-        solutions, objectives = self.get_pareto_front()
-        # انتخاب راه‌حل با کمترین مقدار objective دوم (boundary_size)
-        best_index = np.argmin(objectives[:, 1])
-        final_solution = solutions[best_index]
-        final_objectives = objectives[best_index]
-        return final_solution, final_objectives
+        if self.best_solutions is None: raise RuntimeError("ابتدا optimize را اجرا کنید.")
+        best_balacc, best_idx = -1, 0
+
+        for idx, (u, v) in enumerate(self.best_solutions):
+            # --- محاسبه سریع BalancedAccuracy برای همان (u,v) ---
+            preds = []
+            p = self.probabilities_test
+            for i in range(len(p)):
+                lam = self.cost_matrix[i]
+                alpha = (lam["PN"] - v * lam["PN"]) / ((lam["PN"] - v * lam["PN"]) + (u * lam["NP"]))
+                beta = (v * lam["PN"]) / ((v * lam["PN"]) + (lam["NP"] - u * lam["NP"]))
+                if p[i] >= alpha:
+                    preds.append(1)
+                elif p[i] <= beta:
+                    preds.append(0)
+                else:
+                    preds.append(-1)  # مرزی
+            preds = np.array(preds)
+            # همهٔ مرزی‌ها را «منفی» فرض می‌کنیم برای تخمین سریع
+            preds[preds == -1] = 0
+            cm = confusion_matrix(self.true_labels, preds)
+            TN, FP, FN, TP = cm.ravel()
+            balacc = 0.5 * ((TP / (TP + FN or 1)) + (TN / (TN + FP or 1)))
+
+            if self.front_costs[idx, 1] > 0 and balacc > best_balacc:
+                best_balacc, best_idx = balacc, idx
+
+        return self.best_solutions[best_idx], self.front_costs[best_idx]
+
 
 
 ###########################################
@@ -1119,65 +1146,39 @@ class ParsianThresholdNSGA2:
 ###########################################
 
 class ParsianThreeWayDecision:
-    """
-    در این گام، با داشتن احتمالات نکول p و آستانه‌های alpha و beta،
-    هر نمونه را به یکی از سه دسته POS/NEG/BND تخصیص می‌دهیم.
+    def __init__(self, probabilities_test: np.ndarray, cost_matrix: list,
+                 alpha_beta_pair: Tuple[float,float]):
+        self.prob = probabilities_test
+        self.cost = cost_matrix
+        self.u, self.v = alpha_beta_pair   # همان (u*,v*)
+        self.decisions = None
 
-    اگر:
-      p_i >= alpha  =>  POS
-      p_i <= beta   =>  NEG
-      otherwise     =>  BND
-    """
-
-    def __init__(self, probabilities_test: np.ndarray, the_best_alpha: float, the_best_beta: float):
-        """
-        پارامترها:
-          - probabilities_test: آرایه احتمال نکول برای داده‌های تست
-          - alpha, beta: آستانه‌های تصمیم سه‌طرفه
-        """
-        self.probabilities_test = probabilities_test
-        self.the_best_alpha = the_best_alpha
-        self.the_best_beta = the_best_beta
-        self.decisions = None  # لیبل نهایی هر نمونه: POS=1, NEG=0, BND=-1 (مثلاً)
+    def _alpha_beta_i(self, lam):
+        lam_BP = self.u * lam["NP"]
+        lam_BN = self.v * lam["PN"]
+        α = (lam["PN"] - lam_BN) / ((lam["PN"]-lam_BN) + (lam_BP - lam["PP"]))
+        β = (lam_BN - lam["NN"]) / ((lam_BN - lam["NN"]) + (lam["NP"] - lam_BP))
+        return α, β
 
     def apply_three_way_decision(self):
-        """
-        با توجه به alpha و beta، روی probabilities_test اجرا کرده
-        و سه دسته‌بندی را بازمی‌گرداند.
-        """
-        n_samples = len(self.probabilities_test)
-        decisions = np.zeros(n_samples, dtype=int)  # 0 => NEG, 1 => POS, -1 => BND
+        dec = np.zeros(len(self.prob), dtype=int)
+        for i, p_i in enumerate(self.prob):
+            α, β = self._alpha_beta_i(self.cost[i])
+            if p_i >= α:      dec[i] = 1
+            elif p_i <= β:    dec[i] = 0
+            else:             dec[i] = -1
+        self.decisions = dec
+        return dec
 
-        for i in range(n_samples):
-            p_i = self.probabilities_test[i]
-            if p_i >= self.the_best_alpha:
-                decisions[i] = 1  # POS
-            elif p_i <= self.the_best_beta:
-                decisions[i] = 0  # NEG
-            else:
-                decisions[i] = -1  # BND
-
-        self.decisions = decisions
-        return decisions
-
-    def get_decisions(self):
-        """
-        اگر از قبل apply_three_way_decision را صدا زده باشیم،
-        تصمیم نهایی را برمی‌گردانیم.
-        خروجی یک آرایه با مقادیر {0=NEG, 1=POS, -1=BND}.
-        """
-        return self.decisions
-
+    # ---------- شمارش برچسب‌ها --------------
     def get_decision_counts(self):
         """
-        تعداد نمونه‌های هر دسته (POS=1, NEG=0, BND=-1) را محاسبه و برمی‌گرداند.
-        خروجی: دیکشنری به شکل {1: تعداد POS, 0: تعداد NEG, -1: تعداد BND}
+        برگشت دیکشنری {1:POS , 0:NEG , -1:BND}
         """
         if self.decisions is None:
             self.apply_three_way_decision()
-        unique, counts = np.unique(self.decisions, return_counts=True)
-        return dict(zip(unique, counts))
-
+        uniq, cnt = np.unique(self.decisions, return_counts=True)
+        return dict(zip(uniq, cnt))
 
 ###########################################
 # گام ششم: تصمیم‌گیری نهایی روی نمونه‌های BND
@@ -1602,43 +1603,68 @@ if __name__ == "__main__":
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II
     from numpy import array
 
-    threshold_nsgaii = ParsianThresholdNSGA2(probabilities_test=probabilities_test, cost_matrix=all_costs,
-                                             true_labels=y_test.values,  # یا array(y_test)
-                                             pop_size=50, n_gen=100, step_bnd=False)
+    # ------------------------------------------------------------------
+    # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA‑II  (u*, v*)
+    # ------------------------------------------------------------------
+    threshold_nsgaii = ParsianThresholdNSGA2(
+        probabilities_test=probabilities_test,
+        cost_matrix=all_costs,
+        true_labels=y_test.values,  # یا np.array(y_test)
+        pop_size=50,
+        n_gen=100,
+        step_bnd=False
+    )
     threshold_nsgaii.optimize()
 
     solutions, objectives = threshold_nsgaii.get_pareto_front()
-    visualizer.plot_pareto_front(threshold_nsgaii.front_costs)
+    visualizer.plot_pareto_front(objectives)
 
-    logging.info("🔹 راه‌حل‌های پارتو (alpha,beta) و مقدار اهداف (cost,boundary):")
-    for i, sol in enumerate(solutions):
-        alpha, beta = sol
-        cost_val, boundary_val = objectives[i]
-        logging.info(f"  alpha={alpha:.3f}, beta={beta:.3f} => cost={cost_val:.2f}, boundary={boundary_val:.3f}")
+    logging.info("🔹 راه‌حل‌های پارتو (u,v) و مقدار اهداف (cost, boundary):")
+    for (u, v), (cost_val, bnd_val) in zip(solutions, objectives):
+        logging.info(f"  u={u:.3f}, v={v:.3f}  →  cost={cost_val:,.2f},  boundary={bnd_val:.3f}")
 
-    # انتخاب راه‌حل نهایی از میان راه‌حل‌های پارتو بر اساس کمترین مقدار objective دوم (boundary_size)
-    final_solution, final_objectives = threshold_nsgaii.get_final_solution()
-    best_alpha, best_beta = final_solution[0], final_solution[1]
-
-
+    # انتخاب جفتِ (u*, v*) با کمترین اندازهٔ ناحیهٔ مرزی
+    (best_u, best_v), best_obj = threshold_nsgaii.get_final_solution()
     logging.warning(
-        f"🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
+        f"🔹 بهترین جفت ضریب‌ها: u*={best_u:.3f}, v*={best_v:.3f}  →  "
+        f"cost={best_obj[0]:,.2f},  boundary={best_obj[1]:.3f}"
+    )
 
-    visualizer = Plot()
-    visualizer.plot_with_thresholds(probabilities_test, alpha=best_alpha, beta=best_beta)
+    logging.info("گام چهارم (NSGA‑II چندهدفه) با موفقیت به پایان رسید.")
 
-    logging.info("گام چهارم (NSGA-II چندهدفه) با موفقیت انجام شد.")
-
-    threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, the_best_alpha=best_alpha,
-                                       the_best_beta=best_beta)
+    # ------------------------------------------------------------------
+    # 5) گام پنجم: اعمال تصمیم سه‌راهه با استفاده از (u*, v*)
+    # ------------------------------------------------------------------
+    threeway = ParsianThreeWayDecision(
+        probabilities_test=probabilities_test,
+        cost_matrix=all_costs,
+        alpha_beta_pair=(best_u, best_v)  # (u*, v*)
+    )
     decisions_final = threeway.apply_three_way_decision()
-    logging.warning(f"Decision counts: POS: {threeway.get_decision_counts().get(1, 0)} samples,"
-                    f" NEG: {threeway.get_decision_counts().get(0, 0)} samples,"
-                    f" BND: {threeway.get_decision_counts().get(-1, 0)} samples")
 
-    # 6) گام ششم: تصمیم‌گیری روی BNDها
-    bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="bagging")
+    cnts = threeway.get_decision_counts()
+    logging.warning(
+        f"Decision counts  →  POS: {cnts.get(1, 0)}   NEG: {cnts.get(0, 0)}   BND: {cnts.get(-1, 0)}"
+    )
+
+    # ------------------------------------------------------------------
+    # 6) گام ششم: تعیین تکلیف نمونه‌های ناحیهٔ مرزی با مدل کمکی
+    # ------------------------------------------------------------------
+    bnd_resolver = ParsianBNDResolver(
+        x_train_all=x_train,
+        y_train_all=y_train,
+        model_type="bagging"  # یا "stacking"
+    )
     bnd_resolver.fit_bnd_model()
+
+    decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
+
+    logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
+    logging.error(
+        f"   POS={np.sum(decisions_updated == 1)}, "
+        f"NEG={np.sum(decisions_updated == 0)}, "
+        f"BND={np.sum(decisions_updated == -1)}"
+    )
 
     # اعمال مدل روی نمونه‌های مرزی
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
