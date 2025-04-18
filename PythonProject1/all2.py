@@ -1559,14 +1559,14 @@ class ParsianMethodComparison:
 ###########################################
 if __name__ == "__main__":
     os.environ["LOKY_MAX_CPU_COUNT"] = "8"
-
+    visualizer = Plot()
     logging.basicConfig(level=logging.INFO)
 
     # ساخت آبجکت مخزن داده (LoanRepository)
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=40_000, label_column="LOAN_STATUS",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=49_000, label_column="LOAN_STATUS",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.95, do_balance=True, test_size=0.2,
@@ -1577,7 +1577,6 @@ if __name__ == "__main__":
         logging.error("گام اول ناموفق بود.")
         exit(1)
 
-    visualizer = Plot()
     # visualizer.explained_variance(x_train)
     # visualizer.plot_pca_2d(x_train)
     # visualizer.plot_pca_3d(x_train)
@@ -1590,7 +1589,6 @@ if __name__ == "__main__":
     default_model.fit_model(x_train, y_train)
     probabilities_test = default_model.predict_default_probability(x_test)
 
-    visualizer = Plot()
     visualizer.plot1(probabilities_test)
 
     logging.info(f"احتمال نکول برای اولین 5 نمونه: {probabilities_test[:5]}")
@@ -1623,8 +1621,7 @@ if __name__ == "__main__":
     final_solution, final_objectives = threshold_nsgaii.get_final_solution()
     best_alpha, best_beta = final_solution[0], final_solution[1]
 
-    best_alpha = 0.65
-    best_beta = 0.25
+
     logging.warning(
         f"🔹 the best is: alpha={best_alpha:.3f}, beta={best_beta:.3f} => cost={final_objectives[0]:.2f}, boundary={final_objectives[1]:.3f}")
 
