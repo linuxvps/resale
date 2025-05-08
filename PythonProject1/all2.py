@@ -461,6 +461,41 @@ class LoanDetail(Base):
     ANNUAL_TURNOVER_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
 
 
+class Loan(Base):
+    __tablename__ = "loans"
+
+    CUSTOMER_ID = Column(BigInteger, nullable=True)
+    LOAN_FILE_NUMBER = Column(BigInteger, nullable=True)
+    LOAN_AMOUNT = Column(Numeric(20, 2), nullable=True)
+    CURRENT_LOAN_RATES = Column(Numeric(5, 2), nullable=True)
+    LOAN_PURPOSE = Column(Text, nullable=True)
+    APPLICATION_TYPE = Column(Integer, nullable=True)
+    LOAN_DURATION_DAY = Column(Integer, nullable=True)
+    LOAN_DURATION_MONTH = Column(Integer, nullable=True)
+    LOAN_DURATION_YEAR = Column(Integer, nullable=True)
+    CITY_CODE = Column(Integer, nullable=True)
+    PROVINCE_ID = Column(Integer, nullable=True)
+    LOAN_SUBJECT = Column(Text, nullable=True)
+    LOAN_DATE = Column(DateTime, nullable=True)
+    COLLATERAL_NEEDED_VALUE = Column(Numeric(20, 2), nullable=True)
+    CONTRACT_TYPE_ID = Column(Integer, nullable=True)
+    IS_INSTALLMENT = Column(Integer, nullable=True)
+    INSTALLMENT_NUMBER = Column(Integer, nullable=True)
+    COMPANY_TYPE = Column(Integer, nullable=True)
+    GENDER = Column(Integer, nullable=True)
+    BIRTH_PLACE = Column(Integer, nullable=True)
+    EDUCATION_GRADE = Column(Integer, nullable=True)
+    OCCUPATION = Column(Integer, nullable=True)
+    MARITAL_STATUS = Column(Integer, nullable=True)
+    MONTHLY_INCOME = Column(Numeric(20, 2), nullable=True)
+    BRANCH_CODE = Column(Integer, nullable=True)
+    FILE_STATUS_TITLE2 = Column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<Loan(LOAN_FILE_NUMBER={self.LOAN_FILE_NUMBER}, LOAN_AMOUNT={self.LOAN_AMOUNT})>"
+
+
+
 class LoanRepository:
     """
     ریپازیتوری برای واکشی داده از دیتابیس parsian_loan با SQLAlchemy.
@@ -1764,4 +1799,5 @@ if __name__ == "__main__":
     comparator.add_proposed_method_results(proposed_method_metrics=results)
 
     final_comparison = comparator.show_final_comparison()
-    logging.info("🔹 گام نهم (مقایسه با سایر روش‌ها) با موفقیت انجام شد.")
+    logging.info("🔹 گام نهم (مقایسه با سایر روش‌ها) با موفقیت انجام شد.")4. رابطهٔ تابع هدف با متغیرهای تصمیم
+
