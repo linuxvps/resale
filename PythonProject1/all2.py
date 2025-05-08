@@ -4,14 +4,13 @@ import os
 import networkx as nx
 import pandas as pd
 from colorlog import ColoredFormatter
-from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.tree import DecisionTreeClassifier
 # ------------------------------------------------------------
 # بخش مربوط به SQLAlchemy برای اتصال به دیتابیس و تعریف انتیتی
 # ------------------------------------------------------------
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Text, PrimaryKeyConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -49,28 +48,20 @@ class Plot:
     def __init__(self) -> None:
         pass
 
-    def plot_default_prob_hist(self,           # ← اضافه شدن self
-                               probs,
-                               u, v,
-                               bins=100,
-                               figsize=(12, 6),
-                               log_y=True,
+    def plot_default_prob_hist(self,  # ← اضافه شدن self
+                               probs, u, v, bins=100, figsize=(12, 6), log_y=True,
                                title='Distribution of Default Probabilities with Thresholds (u, v)'):
         """
         رسم هیستوگرام احتمال نکول به‌همراه خطوط آستانهٔ u و v
         """
         plt.figure(figsize=figsize)
 
-        n, bins_edges, _ = plt.hist(probs,
-                                    bins=bins,
-                                    color='skyblue',
-                                    edgecolor='black',
-                                    alpha=0.7)
+        n, bins_edges, _ = plt.hist(probs, bins=bins, color='skyblue', edgecolor='black', alpha=0.7)
 
         mean_val = np.mean(probs)
         plt.axvline(mean_val, color='red', linestyle='--', label=f'Mean = {mean_val:.2f}')
-        plt.axvline(u,        color='green',  linewidth=2, label=f'u (POS) = {u:.3f}')
-        plt.axvline(v,        color='orange', linewidth=2, label=f'v (NEG) = {v:.3f}')
+        plt.axvline(u, color='green', linewidth=2, label=f'u (POS) = {u:.3f}')
+        plt.axvline(v, color='orange', linewidth=2, label=f'v (NEG) = {v:.3f}')
 
         if log_y:
             plt.yscale('log')
@@ -96,25 +87,23 @@ class Plot:
         G.add_node("Feature Selection\n(انتخاب ویژگی‌های کلیدی)")
         G.add_node("Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")
 
-        G.add_edges_from([
-            ("Extract Data\n(استخراج داده‌ها)", "Data Cleaning\n(پاکسازی داده‌ها)"),
-            ("Data Cleaning\n(پاکسازی داده‌ها)", "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)"),
-            ("Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)",
-             "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)"),
-            ("Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)",
-             "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)"),
-            ("Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)",
-             "Correlation Analysis\n(تحلیل همبستگی)"),
+        G.add_edges_from([("Extract Data\n(استخراج داده‌ها)", "Data Cleaning\n(پاکسازی داده‌ها)"),
+            ("Data Cleaning\n(پاکسازی داده‌ها)", "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)"), (
+            "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)",
+            "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)"), (
+            "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)",
+            "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)"), (
+            "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)",
+            "Correlation Analysis\n(تحلیل همبستگی)"),
             ("Correlation Analysis\n(تحلیل همبستگی)", "Remove Redundant Features\n(حذف ویژگی‌های تکراری)"),
-            ("Remove Redundant Features\n(حذف ویژگی‌های تکراری)", "Feature Selection\n(انتخاب ویژگی‌های کلیدی)"),
-            ("Feature Selection\n(انتخاب ویژگی‌های کلیدی)",
-             "Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")
-        ])
+            ("Remove Redundant Features\n(حذف ویژگی‌های تکراری)", "Feature Selection\n(انتخاب ویژگی‌های کلیدی)"), (
+            "Feature Selection\n(انتخاب ویژگی‌های کلیدی)",
+            "Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")])
 
         plt.figure(figsize=(12, 8))
         pos = nx.spring_layout(G, seed=42)
-        nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=3500, font_size=10,
-                font_weight='bold', arrows=True, arrowstyle='->', arrowsize=20)
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=3500, font_size=10, font_weight='bold',
+                arrows=True, arrowstyle='->', arrowsize=20)
         plt.title("Flowchart: Standardization & Feature Selection Process", fontsize=14, fontweight='bold')
 
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
@@ -175,12 +164,9 @@ class Plot:
         plt.tight_layout()
         plt.show()
 
-    def plot_with_thresholds(self,
-                             probabilities: np.ndarray,
-                             u: float,            # ← قبلاً alpha بود
-                             v: float,            # ← قبلاً beta بود
-                             bins: int = 100,
-                             figsize: Tuple[int, int] = (12, 6),
+    def plot_with_thresholds(self, probabilities: np.ndarray, u: float,  # ← قبلاً alpha بود
+                             v: float,  # ← قبلاً beta بود
+                             bins: int = 100, figsize: Tuple[int, int] = (12, 6),
                              xlim: Tuple[float, float] = None) -> None:
         """
         رسم هیستوگرام احتمال نکول به‌همراه خطوط u و v (آستانه‌های بهینهٔ جهانی).
@@ -188,35 +174,18 @@ class Plot:
         plt.figure(figsize=figsize)
 
         # ۱) هیستوگرام احتمال‌ها
-        n, bins_array, patches = plt.hist(probabilities,
-                                          bins=bins,
-                                          edgecolor='black',
-                                          alpha=0.7,
-                                          color='skyblue')
+        n, bins_array, patches = plt.hist(probabilities, bins=bins, edgecolor='black', alpha=0.7, color='skyblue')
 
         # ۲) خط میانگین
         mean_val = np.mean(probabilities)
-        plt.axvline(mean_val,
-                    color='red',
-                    linestyle='dashed',
-                    linewidth=2,
-                    label=f'Mean = {mean_val:.2f}')
+        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2, label=f'Mean = {mean_val:.2f}')
 
         # ۳) خطوط u و v  (به‌ترتیب تصمیمِ POS و NEGِ سراسری)
-        plt.axvline(u,
-                    color='green',
-                    linestyle='-',
-                    linewidth=3,
-                    label=f'u (POS) = {u:.3f}')
-        plt.axvline(v,
-                    color='orange',
-                    linestyle='-',
-                    linewidth=3,
-                    label=f'v (NEG) = {v:.3f}')
+        plt.axvline(u, color='green', linestyle='-', linewidth=3, label=f'u (POS) = {u:.3f}')
+        plt.axvline(v, color='orange', linestyle='-', linewidth=3, label=f'v (NEG) = {v:.3f}')
 
         # جزئیات نمودار
-        plt.title("Distribution of Default Probabilities with Global Thresholds (u, v)",
-                  fontsize=16)
+        plt.title("Distribution of Default Probabilities with Global Thresholds (u, v)", fontsize=16)
         plt.xlabel("Probability", fontsize=14)
         plt.ylabel("Frequency", fontsize=14)
         plt.grid(True, linestyle='--', alpha=0.6)
@@ -235,14 +204,7 @@ class Plot:
 
         plt.figure(figsize=(14, 12))  # افزایش ارتفاع نمودار
 
-        sns.barplot(
-            x='Importance',
-            y='Feature',
-            data=feature_importance,
-            palette='viridis',
-            hue='Feature',
-            dodge=False
-        )
+        sns.barplot(x='Importance', y='Feature', data=feature_importance, palette='viridis', hue='Feature', dodge=False)
 
         plt.title('Feature Importance (Top {})'.format(top_n), fontsize=16)
         plt.xlabel('Importance', fontsize=14)
@@ -251,7 +213,6 @@ class Plot:
         plt.legend([], [], frameon=False)  # حذف legend اضافی
         plt.tight_layout()  # تنظیم خودکار حاشیه‌ها
         plt.show()
-
 
     def plot_pca(self, X: pd.DataFrame, n_components: int = 2):
         """
@@ -372,93 +333,93 @@ from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime, Date, Str
 from datetime import datetime
 
 
-class ParsianLoan(Base):
-    __tablename__ = "parsian_loan_2"
+# class ParsianLoan(Base):
+#     __tablename__ = "parsian_loan_2"
+#
+#     id = Column(BigInteger, primary_key=True, autoincrement=True)
+#     advance_pay = Column(Numeric(28, 8), nullable=True)
+#     advance_pay_to_remain_non_cash = Column(Numeric(28, 8), nullable=True)
+#     advance_pay_to_total_cash = Column(Numeric(28, 8), nullable=True)
+#     approval_amount = Column(Numeric(28, 8), nullable=True)
+#     bank_share_cash_amount = Column(Numeric(28, 8), nullable=True)
+#     bank_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
+#     branch_code = Column(Integer, nullable=False)
+#     branchname = Column(String(100, collation='utf8mb4_unicode_ci'), nullable=True)
+#     charge = Column(Numeric(28, 8), nullable=True)
+#     loan_file_numberr = Column(BigInteger, nullable=True)
+#     client_id = Column(Integer, nullable=True)
+#     commission_amount_remain = Column(Numeric(28, 8), nullable=True)
+#     contract = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
+#     create_date = Column(Date, nullable=True)
+#     customer_obligation_amount = Column(Numeric(28, 8), nullable=True)
+#     customer_share_cash_amount = Column(Numeric(28, 8), nullable=True)
+#     customer_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
+#     discount = Column(Numeric(28, 8), nullable=True)
+#     due_date = Column(Date, nullable=True)
+#     finalized_loan_amount = Column(Numeric(28, 8), nullable=True)
+#     first_over_due = Column(Date, nullable=True)
+#     first_passed = Column(Date, nullable=True)
+#     first_payment_date_in_du = Column(Date, nullable=True)
+#     frequency = Column(Integer, nullable=True)
+#     inc_commission_amount = Column(Numeric(28, 8), nullable=True)
+#     insert_sysdate = Column(DateTime(6), nullable=False, default=datetime.utcnow)
+#     installment_number_remain = Column(Integer, nullable=True)
+#     interest_amount = Column(Numeric(28, 8), nullable=True)
+#     interest_rate = Column(Numeric(19, 2), nullable=True)
+#     interest_sum = Column(Numeric(28, 8), nullable=True)
+#     is_installment = Column(CHAR, nullable=True)
+#     loan_duration_day = Column(Integer, nullable=True)
+#     loan_file_number = Column(BigInteger, nullable=True)
+#     long_title = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
+#     obligation_penalty = Column(Numeric(28, 8), nullable=True)
+#     passed_date = Column(Date, nullable=True)
+#     penalty = Column(Numeric(28, 8), nullable=True)
+#     penalty_interest = Column(Numeric(28, 8), nullable=True)
+#     principal_sum = Column(Numeric(28, 8), nullable=True)
+#     receivable_installment_number = Column(Integer, nullable=True)
+#     sit_distribute_phases = Column(Integer, nullable=True)
+#     sit_duration = Column(Integer, nullable=True)
+#     sit_duration_day = Column(Integer, nullable=True)
+#     sit_fast_receive_percent = Column(Float, nullable=True)
+#     sit_flag = Column(CHAR, nullable=True)
+#     status = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
+#     title = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
+#     to_due_date = Column(Numeric(28, 8), nullable=True)
+#     to_end_of_month = Column(Numeric(28, 8), nullable=True)
+#     total_payment_up_to_now = Column(Numeric(28, 8), nullable=True)
+#     total_repayment_up_to_now = Column(Numeric(28, 8), nullable=True)
+#
+#     def __repr__(self):
+#         return f"<ParsianLoan(id={self.id})>"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    advance_pay = Column(Numeric(28, 8), nullable=True)
-    advance_pay_to_remain_non_cash = Column(Numeric(28, 8), nullable=True)
-    advance_pay_to_total_cash = Column(Numeric(28, 8), nullable=True)
-    approval_amount = Column(Numeric(28, 8), nullable=True)
-    bank_share_cash_amount = Column(Numeric(28, 8), nullable=True)
-    bank_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
-    branch_code = Column(Integer, nullable=False)
-    branchname = Column(String(100, collation='utf8mb4_unicode_ci'), nullable=True)
-    charge = Column(Numeric(28, 8), nullable=True)
-    loan_file_numberr = Column(BigInteger, nullable=True)
-    client_id = Column(Integer, nullable=True)
-    commission_amount_remain = Column(Numeric(28, 8), nullable=True)
-    contract = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
-    create_date = Column(Date, nullable=True)
-    customer_obligation_amount = Column(Numeric(28, 8), nullable=True)
-    customer_share_cash_amount = Column(Numeric(28, 8), nullable=True)
-    customer_share_non_cash_amount = Column(Numeric(28, 8), nullable=True)
-    discount = Column(Numeric(28, 8), nullable=True)
-    due_date = Column(Date, nullable=True)
-    finalized_loan_amount = Column(Numeric(28, 8), nullable=True)
-    first_over_due = Column(Date, nullable=True)
-    first_passed = Column(Date, nullable=True)
-    first_payment_date_in_du = Column(Date, nullable=True)
-    frequency = Column(Integer, nullable=True)
-    inc_commission_amount = Column(Numeric(28, 8), nullable=True)
-    insert_sysdate = Column(DateTime(6), nullable=False, default=datetime.utcnow)
-    installment_number_remain = Column(Integer, nullable=True)
-    interest_amount = Column(Numeric(28, 8), nullable=True)
-    interest_rate = Column(Numeric(19, 2), nullable=True)
-    interest_sum = Column(Numeric(28, 8), nullable=True)
-    is_installment = Column(CHAR, nullable=True)
-    loan_duration_day = Column(Integer, nullable=True)
-    loan_file_number = Column(BigInteger, nullable=True)
-    long_title = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
-    obligation_penalty = Column(Numeric(28, 8), nullable=True)
-    passed_date = Column(Date, nullable=True)
-    penalty = Column(Numeric(28, 8), nullable=True)
-    penalty_interest = Column(Numeric(28, 8), nullable=True)
-    principal_sum = Column(Numeric(28, 8), nullable=True)
-    receivable_installment_number = Column(Integer, nullable=True)
-    sit_distribute_phases = Column(Integer, nullable=True)
-    sit_duration = Column(Integer, nullable=True)
-    sit_duration_day = Column(Integer, nullable=True)
-    sit_fast_receive_percent = Column(Float, nullable=True)
-    sit_flag = Column(CHAR, nullable=True)
-    status = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
-    title = Column(String(255, collation='utf8mb4_unicode_ci'), nullable=True)
-    to_due_date = Column(Numeric(28, 8), nullable=True)
-    to_end_of_month = Column(Numeric(28, 8), nullable=True)
-    total_payment_up_to_now = Column(Numeric(28, 8), nullable=True)
-    total_repayment_up_to_now = Column(Numeric(28, 8), nullable=True)
 
-    def __repr__(self):
-        return f"<ParsianLoan(id={self.id})>"
-
-
-class LoanDetail(Base):
-    __tablename__ = "MY_TABLE"
-
-    ID = Column(BigInteger, primary_key=True, autoincrement=False)
-    LOAN_FILE_NUMBER = Column(BigInteger, nullable=True)
-    LOAN_AMOUNT = Column(Numeric(65, 2), nullable=True)
-    TOTAL_DEBT_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
-    CURRENT_LOAN_RATES = Column(Numeric(65, 2), nullable=True)
-    LOAN_PURPOSE = Column(String(255), nullable=True)
-    CONTRACT_DUE_DATE = Column(Date, nullable=True)
-    INSTALLMENT_LOAN_AWARD_DATE = Column(Date, nullable=True)
-    FIRST_PAYMENT_DATE_IN_DU = Column(Date, nullable=True)
-    GRANT_DATE = Column(Date, nullable=True)
-    APPLICATION_TYPE = Column(CHAR, nullable=True)
-    LOAN_STATUS = Column(String(255), nullable=True)
-    TOTAL_INSTALLMENT_AMOUNT = Column(Numeric(65, 2), nullable=True)
-    NUM_OF_INSTALLMENTS = Column(BigInteger, nullable=True)
-    FIRST_INSTALLMENT_DUE = Column(Date, nullable=True)
-    LAST_INSTALLMENT_DUE = Column(Date, nullable=True)
-    DEFAULT_COUNT = Column(BigInteger, nullable=True)
-    COMPANY_TYPE = Column(BigInteger, nullable=True)
-    POSTAL_CODE = Column(String(20), nullable=True)
-    CITY_CODE = Column(String(20), nullable=True)
-    REGION = Column(String(255), nullable=True)
-    PROVINCE = Column(String(255), nullable=True)
-    APPROXIMATE_INCOME_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
-    ANNUAL_TURNOVER_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
+# class LoanDetail(Base):
+#     __tablename__ = "MY_TABLE"
+#
+#     ID = Column(BigInteger, primary_key=True, autoincrement=False)
+#     LOAN_FILE_NUMBER = Column(BigInteger, nullable=True)
+#     LOAN_AMOUNT = Column(Numeric(65, 2), nullable=True)
+#     TOTAL_DEBT_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
+#     CURRENT_LOAN_RATES = Column(Numeric(65, 2), nullable=True)
+#     LOAN_PURPOSE = Column(String(255), nullable=True)
+#     CONTRACT_DUE_DATE = Column(Date, nullable=True)
+#     INSTALLMENT_LOAN_AWARD_DATE = Column(Date, nullable=True)
+#     FIRST_PAYMENT_DATE_IN_DU = Column(Date, nullable=True)
+#     GRANT_DATE = Column(Date, nullable=True)
+#     APPLICATION_TYPE = Column(CHAR, nullable=True)
+#     LOAN_STATUS = Column(String(255), nullable=True)
+#     TOTAL_INSTALLMENT_AMOUNT = Column(Numeric(65, 2), nullable=True)
+#     NUM_OF_INSTALLMENTS = Column(BigInteger, nullable=True)
+#     FIRST_INSTALLMENT_DUE = Column(Date, nullable=True)
+#     LAST_INSTALLMENT_DUE = Column(Date, nullable=True)
+#     DEFAULT_COUNT = Column(BigInteger, nullable=True)
+#     COMPANY_TYPE = Column(BigInteger, nullable=True)
+#     POSTAL_CODE = Column(String(20), nullable=True)
+#     CITY_CODE = Column(String(20), nullable=True)
+#     REGION = Column(String(255), nullable=True)
+#     PROVINCE = Column(String(255), nullable=True)
+#     APPROXIMATE_INCOME_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
+#     ANNUAL_TURNOVER_IN_TOMAN = Column(Numeric(65, 2), nullable=True)
 
 
 class Loan(Base):
@@ -491,9 +452,12 @@ class Loan(Base):
     BRANCH_CODE = Column(Integer, nullable=True)
     FILE_STATUS_TITLE2 = Column(Text, nullable=True)
 
+    __table_args__ = (
+        PrimaryKeyConstraint('LOAN_FILE_NUMBER', 'CUSTOMER_ID'),
+    )
+
     def __repr__(self):
         return f"<Loan(LOAN_FILE_NUMBER={self.LOAN_FILE_NUMBER}, LOAN_AMOUNT={self.LOAN_AMOUNT})>"
-
 
 
 class LoanRepository:
@@ -508,20 +472,17 @@ class LoanRepository:
         SessionLocal = sessionmaker(bind=self.engine)
         self.session = SessionLocal()
 
-    def fetch_loans_in_chunks(self, excluded_columns,chunk_size=100000):
-        total_rows = self.session.query(LoanDetail).count()
+    def fetch_loans_in_chunks(self, excluded_columns, chunk_size=100000):
+        total_rows = self.session.query(Loan).count()
         offset = 0
         dataframes = []
         while offset < total_rows:
-            loans_chunk = (self.session.query(LoanDetail)
-                           .order_by(LoanDetail.LOAN_FILE_NUMBER.desc())
-                           .offset(offset)
-                           .limit(chunk_size)
-                           .all())
+            loans_chunk = (
+                self.session.query(Loan).order_by(Loan.LOAN_FILE_NUMBER.desc()).offset(offset).limit(chunk_size).all())
             if not loans_chunk:
                 break
             # ستون‌هایی که نیاز به دریافت نداریم
-            all_columns = list(LoanDetail.__table__.columns.keys())
+            all_columns = list(Loan.__table__.columns.keys())
             selected_columns = [col for col in all_columns if col not in excluded_columns]
             data = {col: [getattr(loan, col) for loan in loans_chunk] for col in selected_columns}
             df_chunk = pd.DataFrame(data)
@@ -533,22 +494,20 @@ class LoanRepository:
         else:
             return pd.DataFrame()
 
-
-
-    def fetch_loans(self,excluded_columns, limit=10_000):
+    def fetch_loans(self, excluded_columns, limit=10_000):
         """
         واکشی حداکثر `limit` رکورد از جدول parsian_loan.
         داده‌ها در قالب یک DataFrame برگردانده می‌شوند.
         """
         # دریافت لیست تمام ستون‌های موجود در جدول
-        all_columns = [column.name for column in LoanDetail.__table__.columns]
+        all_columns = [column.name for column in Loan.__table__.columns]
         # انتخاب ستون‌هایی که در لیست excluded وجود ندارند
         selected_columns = [col for col in all_columns if col not in excluded_columns]
 
         # اجرای کوئری با انتخاب فقط ستون‌های مورد نظر
 
-        loans = (self.session.query(*[getattr(LoanDetail, col) for col in selected_columns]).order_by(
-            LoanDetail.LOAN_FILE_NUMBER.desc()).limit(limit).all())
+        loans = (self.session.query(*[getattr(Loan, col) for col in selected_columns]).order_by(
+            Loan.LOAN_FILE_NUMBER.desc()).limit(limit).all())
 
         if not loans:
             logging.warning("هیچ داده‌ای از پایگاه داده دریافت نشد.")
@@ -672,7 +631,6 @@ class LoanPreprocessor:
             df[numeric_cols] = self.scaler.transform(df[numeric_cols])
         return df
 
-
     def convert_labels(self, df, label_column="status"):
         logging.info(f"[LoanPreprocessor] تبدیل برچسب: {label_column}")
         if label_column not in df.columns:
@@ -681,7 +639,7 @@ class LoanPreprocessor:
         logger.warning(df[label_column].value_counts())
 
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
-        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد" , "باطل شده" , "درخواست رد شد"}
+        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد", "باطل شده", "درخواست رد شد"}
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
         # لاگ گرفتن از توزیع داده‌ها
         label_counts = df[label_column].value_counts()
@@ -745,7 +703,7 @@ class LoanPreprocessor:
         logging.info("ویژگی‌های انتخاب نشده: " + ", ".join(not_selected_features))
         return X.loc[:, selected_features]
 
-    def summary_stats_for_df(self,df: pd.DataFrame) -> pd.DataFrame:
+    def summary_stats_for_df(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         این تابع برای هر ستون موجود در DataFrame، آماری شامل:
         تعداد یکتا، تعداد داده‌های گمشده (NaN)، مینیموم، ماکسیموم، دامنه (ماکسیموم - مینیموم)،
@@ -801,17 +759,9 @@ class LoanPreprocessor:
             except Exception as e:
                 col_min, col_max, col_range, col_mean, col_var, col_std = None, None, None, None, None, None
 
-            stats_rows.append({
-                "متغیر": col,
-                "تعداد یکتا": unique_count,
-                "گمشده": missing_count,
-                "مینیموم": col_min,
-                "ماکسیموم": col_max,
-                "دامنه": col_range,
-                "میانگین": col_mean,
-                "واریانس": col_var,
-                "انحراف معیار": col_std
-            })
+            stats_rows.append({"متغیر": col, "تعداد یکتا": unique_count, "گمشده": missing_count, "مینیموم": col_min,
+                "ماکسیموم": col_max, "دامنه": col_range, "میانگین": col_mean, "واریانس": col_var,
+                "انحراف معیار": col_std})
 
         stats_df = pd.DataFrame(stats_rows)
         return stats_df
@@ -857,12 +807,13 @@ class ParsianPreprocessingManager:
         خروجی: (x_train, y_train, x_test, y_test, original_df)
         """
         logging.info("🔵 [Step1] شروع آماده‌سازی داده‌ها (Preprocessing).")
-        excluded_columns = [LoanDetail.REGION.key,LoanDetail.ID.key,LoanDetail.COMPANY_TYPE.key]
+        # excluded_columns = [LoanDetail.REGION.key, LoanDetail.ID.key, LoanDetail.COMPANY_TYPE.key]
+        excluded_columns = []
         # اگر تعداد رکوردها بسیار زیاد باشد، از روش chunk استفاده می‌کنیم
         if self.limit_records > 50_000:
-            df = self.repository.fetch_loans_in_chunks(excluded_columns,chunk_size=100000)
+            df = self.repository.fetch_loans_in_chunks(excluded_columns, chunk_size=100000)
         else:
-            df = self.repository.fetch_loans(excluded_columns,limit=self.limit_records)
+            df = self.repository.fetch_loans(excluded_columns, limit=self.limit_records)
 
         if df.empty:
             logging.error("هیچ داده‌ای دریافت نشد. فرآیند پایان یافت.")
@@ -986,13 +937,9 @@ class ParsianLossMatrix:
             principal = float(self.df_test.loc[i, self.approval_col] or 0.0)
             interest = float(self.df_test.loc[i, self.interest_col] or 0.0)
 
-            self.cost_matrix.append({
-                "PP": 0.0,
-                "NN": 0.0,
-                "PN": interest,
-                "NP": principal + interest  # نه ضرب!  جمع طبق مقاله
-            })
-
+            self.cost_matrix.append(
+                {"PP": 0.0, "NN": 0.0, "PN": interest, "NP": principal + interest  # نه ضرب!  جمع طبق مقاله
+                })
 
     def get_cost_for_sample(self, index: int):
         """
@@ -1155,7 +1102,6 @@ class ParsianThresholdNSGA2:
             out["F"] = np.column_stack([f1, f2])
             out["G"] = g
 
-
     def optimize(self):
         """
         اجرای الگوریتم NSGA-II برای کمینه‌کردن [cost, boundary_size]
@@ -1226,17 +1172,16 @@ class ParsianThresholdNSGA2:
 ###########################################
 
 class ParsianThreeWayDecision:
-    def __init__(self, probabilities_test: np.ndarray, cost_matrix: list,
-                 alpha_beta_pair: Tuple[float,float]):
+    def __init__(self, probabilities_test: np.ndarray, cost_matrix: list, alpha_beta_pair: Tuple[float, float]):
         self.prob = probabilities_test
         self.cost = cost_matrix
-        self.u, self.v = alpha_beta_pair   # همان (u*,v*)
+        self.u, self.v = alpha_beta_pair  # همان (u*,v*)
         self.decisions = None
 
     def _alpha_beta_i(self, lam):
         lam_BP = self.u * lam["NP"]
         lam_BN = self.v * lam["PN"]
-        α = (lam["PN"] - lam_BN) / ((lam["PN"]-lam_BN) + (lam_BP - lam["PP"]))
+        α = (lam["PN"] - lam_BN) / ((lam["PN"] - lam_BN) + (lam_BP - lam["PP"]))
         β = (lam_BN - lam["NN"]) / ((lam_BN - lam["NN"]) + (lam["NP"] - lam_BP))
         return α, β
 
@@ -1244,9 +1189,12 @@ class ParsianThreeWayDecision:
         dec = np.zeros(len(self.prob), dtype=int)
         for i, p_i in enumerate(self.prob):
             α, β = self._alpha_beta_i(self.cost[i])
-            if p_i >= α:      dec[i] = 1
-            elif p_i <= β:    dec[i] = 0
-            else:             dec[i] = -1
+            if p_i >= α:
+                dec[i] = 1
+            elif p_i <= β:
+                dec[i] = 0
+            else:
+                dec[i] = -1
         self.decisions = dec
         return dec
 
@@ -1259,6 +1207,7 @@ class ParsianThreeWayDecision:
             self.apply_three_way_decision()
         uniq, cnt = np.unique(self.decisions, return_counts=True)
         return dict(zip(uniq, cnt))
+
 
 ###########################################
 # گام ششم: تصمیم‌گیری نهایی روی نمونه‌های BND
@@ -1315,27 +1264,18 @@ class ParsianBNDResolver:
             self.classifier = StackingClassifier(estimators=base_estimators, final_estimator=meta_estimator, cv=5,
                                                  n_jobs=-1)
         elif self.model_type.lower() == "bagging":
-            base_estimator = DecisionTreeClassifier(
-                criterion="gini",
-                max_depth=None,  # اجازهٔ رشد کامل
+            base_estimator = DecisionTreeClassifier(criterion="gini", max_depth=None,  # اجازهٔ رشد کامل
                 min_samples_leaf=2,  # جلوگیری از over‑fitting ریز
                 class_weight="balanced",  # جبران کلاس اقلیت
-                random_state=42
-            )
+                random_state=42)
 
             # ۲) BaggingClassifier با ۲۰۰ درخت، بوت‌استرپ هم روی نمونه و هم روی ویژگی‌ها
-            self.classifier = BaggingClassifier(
-                estimator=base_estimator,
-                n_estimators=200,  # تعداد کیف‌های زیادتر
+            self.classifier = BaggingClassifier(estimator=base_estimator, n_estimators=200,  # تعداد کیف‌های زیادتر
                 max_samples=0.8,  # ۸۰٪ نمونه‌ها در هر کیف
                 max_features=0.8,  # ۸۰٪ ویژگی‌ها در هر کیف
-                bootstrap=True,
-                bootstrap_features=True,  # بوت‌استرپ ویژگی‌ها برای متنوع‌سازی بیشتر
+                bootstrap=True, bootstrap_features=True,  # بوت‌استرپ ویژگی‌ها برای متنوع‌سازی بیشتر
                 oob_score=True,  # برآورد خطای خارج‌از-کیف
-                n_jobs=-1,
-                random_state=42,
-                verbose=0
-            )
+                n_jobs=-1, random_state=42, verbose=0)
         else:
             raise ValueError("فعلاً فقط مدل‌های 'stacking' و 'bagging' پشتیبانی می‌شوند.")
 
@@ -1650,6 +1590,7 @@ class ParsianMethodComparison:
         logging.warning("\n" + str(self.comparison_table))
         return self.comparison_table
 
+
 ###########################################
 # تست کل فرآیند (در صورت اجرای مستقیم این فایل)
 ###########################################
@@ -1662,7 +1603,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=49_000, label_column="LOAN_STATUS",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=49_000, label_column="FILE_STATUS_TITLE2",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.95, do_balance=True, test_size=0.2,
@@ -1702,14 +1643,9 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA‑II  (u*, v*)
     # ------------------------------------------------------------------
-    threshold_nsgaii = ParsianThresholdNSGA2(
-        probabilities_test=probabilities_test,
-        cost_matrix=all_costs,
+    threshold_nsgaii = ParsianThresholdNSGA2(probabilities_test=probabilities_test, cost_matrix=all_costs,
         true_labels=y_test.values,  # یا np.array(y_test)
-        pop_size=50,
-        n_gen=100,
-        step_bnd=False
-    )
+        pop_size=50, n_gen=100, step_bnd=False)
     threshold_nsgaii.optimize()
 
     solutions, objectives = threshold_nsgaii.get_pareto_front()
@@ -1721,10 +1657,8 @@ if __name__ == "__main__":
 
     # انتخاب جفتِ (u*, v*) با کمترین اندازهٔ ناحیهٔ مرزی
     (best_u, best_v), best_obj = threshold_nsgaii.get_final_solution()
-    logging.warning(
-        f"🔹 بهترین جفت ضریب‌ها: u*={best_u:.3f}, v*={best_v:.3f}  →  "
-        f"cost={best_obj[0]:,.2f},  boundary={best_obj[1]:.3f}"
-    )
+    logging.warning(f"🔹 بهترین جفت ضریب‌ها: u*={best_u:.3f}, v*={best_v:.3f}  →  "
+                    f"cost={best_obj[0]:,.2f},  boundary={best_obj[1]:.3f}")
 
     logger.warning("11111111111111111111111111111111111111111111")
     logger.warning(f"best_u: {best_u}, best_v: {best_v}")
@@ -1732,43 +1666,34 @@ if __name__ == "__main__":
 
     visualizer.plot_with_thresholds(probabilities_test, u=best_u, v=best_v)
 
-    visualizer.plot_default_prob_hist(probabilities_test,best_u,best_v)
+    visualizer.plot_default_prob_hist(probabilities_test, best_u, best_v)
 
     logging.info("گام چهارم (NSGA‑II چندهدفه) با موفقیت به پایان رسید.")
 
     # ------------------------------------------------------------------
     # 5) گام پنجم: اعمال تصمیم سه‌راهه با استفاده از (u*, v*)
     # ------------------------------------------------------------------
-    threeway = ParsianThreeWayDecision(
-        probabilities_test=probabilities_test,
-        cost_matrix=all_costs,
+    threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, cost_matrix=all_costs,
         alpha_beta_pair=(best_u, best_v)  # (u*, v*)
     )
     decisions_final = threeway.apply_three_way_decision()
 
     cnts = threeway.get_decision_counts()
-    logging.warning(
-        f"Decision counts  →  POS: {cnts.get(1, 0)}   NEG: {cnts.get(0, 0)}   BND: {cnts.get(-1, 0)}"
-    )
+    logging.warning(f"Decision counts  →  POS: {cnts.get(1, 0)}   NEG: {cnts.get(0, 0)}   BND: {cnts.get(-1, 0)}")
 
     # ------------------------------------------------------------------
     # 6) گام ششم: تعیین تکلیف نمونه‌های ناحیهٔ مرزی با مدل کمکی
     # ------------------------------------------------------------------
-    bnd_resolver = ParsianBNDResolver(
-        x_train_all=x_train,
-        y_train_all=y_train,
-        model_type="bagging"  # یا "stacking"
+    bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="bagging"  # یا "stacking"
     )
     bnd_resolver.fit_bnd_model()
 
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
 
     logging.info("🔹 برچسب‌های نهایی پس از گام ششم:")
-    logging.error(
-        f"   POS={np.sum(decisions_updated == 1)}, "
-        f"NEG={np.sum(decisions_updated == 0)}, "
-        f"BND={np.sum(decisions_updated == -1)}"
-    )
+    logging.error(f"   POS={np.sum(decisions_updated == 1)}, "
+                  f"NEG={np.sum(decisions_updated == 0)}, "
+                  f"BND={np.sum(decisions_updated == -1)}")
 
     # اعمال مدل روی نمونه‌های مرزی
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
@@ -1799,5 +1724,4 @@ if __name__ == "__main__":
     comparator.add_proposed_method_results(proposed_method_metrics=results)
 
     final_comparison = comparator.show_final_comparison()
-    logging.info("🔹 گام نهم (مقایسه با سایر روش‌ها) با موفقیت انجام شد.")4. رابطهٔ تابع هدف با متغیرهای تصمیم
-
+    logging.info("🔹 گام نهم (مقایسه با سایر روش‌ها) با موفقیت انجام شد.")
