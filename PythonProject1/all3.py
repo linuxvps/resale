@@ -846,7 +846,7 @@ class ParsianLossMatrix:
         self.cost_matrix.clear()
         for i in range(len(self.df_test)):
             principal = float(self.df_test.loc[i, self.approval_col] or 0.0)
-            interest = float(self.df_test.loc[i, self.interest_col] or 0.0)
+            interest = float(self.df_test.loc[i, self.interest_col] or 0.0) * principal
 
             self.cost_matrix.append(
                 {"PP": 0.0, "NN": 0.0, "PN": interest, "NP": principal + interest  # نه ضرب!  جمع طبق مقاله
@@ -1526,13 +1526,9 @@ if __name__ == "__main__":
         logging.error("گام اول ناموفق بود.")
         exit(1)
 
-    # visualizer.explained_variance(x_train)
-    # visualizer.plot_pca_2d(x_train)
-    # visualizer.plot_pca_3d(x_train)
-    # visualizer.plot_tsne(x_train)
-    # visualizer.draw_preprocessing_flowchart()
-
+    ###########################################
     # 2) اجرای گام دوم: آموزش مدل و محاسبه احتمال نکول
+    ###########################################
     default_model = ParsianDefaultProbabilityModel(model_type="lightgbm", n_estimators=100, learning_rate=0.05,
                                                    random_state=42)
     default_model.fit_model(x_train, y_train)
@@ -1543,8 +1539,9 @@ if __name__ == "__main__":
     logging.info(f"احتمال نکول برای اولین 5 نمونه: {probabilities_test[:5]}")
     logging.info("گام دوم (برآورد احتمال نکول) با موفقیت انجام شد.")
 
+    ###########################################
     # 3) گام سوم: محاسبه ماتریس زیان
-    # فرض می‌کنیم x_test دارای ستون‌های approval_amount و interest_amount است.
+    ###########################################
     cost_calc = ParsianLossMatrix(df_test=x_test, approval_col="LOAN_AMOUNT", interest_col="CURRENT_LOAN_RATES")
     cost_calc.compute_costs()
     all_costs = cost_calc.get_all_costs()
@@ -1552,9 +1549,9 @@ if __name__ == "__main__":
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II
     from numpy import array
 
-    # ------------------------------------------------------------------
+    ###########################################
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA‑II  (u*, v*)
-    # ------------------------------------------------------------------
+    ###########################################
     threshold_nsgaii = ParsianThresholdNSGA2(probabilities_test=probabilities_test, cost_matrix=all_costs,
                                              true_labels=y_test.values,  # یا np.array(y_test)
                                              pop_size=50, n_gen=100, step_bnd=False)
@@ -1582,9 +1579,9 @@ if __name__ == "__main__":
 
     logging.info("گام چهارم (NSGA‑II چندهدفه) با موفقیت به پایان رسید.")
 
-    # ------------------------------------------------------------------
+    ###########################################
     # 5) گام پنجم: اعمال تصمیم سه‌راهه با استفاده از (u*, v*)
-    # ------------------------------------------------------------------
+    ###########################################
     threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, cost_matrix=all_costs,
                                        alpha_beta_pair=(best_u, best_v)  # (u*, v*)
                                        )
@@ -1593,9 +1590,9 @@ if __name__ == "__main__":
     cnts = threeway.get_decision_counts()
     logging.warning(f"Decision counts  →  POS: {cnts.get(1, 0)}   NEG: {cnts.get(0, 0)}   BND: {cnts.get(-1, 0)}")
 
-    # ------------------------------------------------------------------
+    ###########################################
     # 6) گام ششم: تعیین تکلیف نمونه‌های ناحیهٔ مرزی با مدل کمکی
-    # ------------------------------------------------------------------
+    ###########################################
     bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="bagging"  # یا "stacking"
                                       )
     bnd_resolver.fit_bnd_model()
@@ -1614,7 +1611,9 @@ if __name__ == "__main__":
     logging.error(
         f" count POS={np.sum(decisions_updated == 1)}, NEG={np.sum(decisions_updated == 0)}, BND={np.sum(decisions_updated == -1)}")
 
+    ###########################################
     # 7) گام هفتم: Evaluation نهایی
+    ###########################################
     final_eval = ParsianFinalEvaluator(true_labels=y_test.values, final_decisions=decisions_updated,
                                        probabilities_test=probabilities_test,  # اگر AUC بخواهیم
                                        cost_matrix=all_costs  # اگر هزینه بخواهیم
