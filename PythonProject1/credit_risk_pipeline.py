@@ -139,6 +139,11 @@ lambda_PN = interest_te                    # ردِ خوش‌حساب
 # ----------------------------------------------------------------------
 # ۳) تعریف مسئله‌ی بهینه‌سازی
 # ----------------------------------------------------------------------
+# ------------------------------------------------------------------
+# ۳) تعریف مسئله‌ی بهینه‌سازی (نسخه ۱۰۰٪ منطبق با مقاله)
+# ------------------------------------------------------------------
+EPS = 1e-6        # حاشیهٔ اطمینان برای نامساوی تیز u+v<1
+
 class ThresholdProblem(ElementwiseProblem):
     def __init__(self, y, p, lnp, lpn):
         super().__init__(n_var=2, n_obj=2, n_constr=1,
@@ -147,22 +152,28 @@ class ThresholdProblem(ElementwiseProblem):
 
     def _evaluate(self, x, out, *_):
         u, v = x
-        # قید جمع
-        g = u + v - 1.0
+        # قید اصلی با نامساوی تیز
+        g = u + v - (1.0 - EPS)         # g ≤ 0   ⇒   u+v < 1
 
+        # آستانه‌های فردی (معادله ۵)
         alpha = (self.lpn - v*self.lpn) / (u*self.lnp - v*self.lpn + self.lpn)
         beta  = (v*self.lpn) / (v*self.lpn + self.lnp - u*self.lnp)
 
+        # تصمیم سه‌راهه
         dec = np.where(self.p >= alpha, 1,
                        np.where(self.p <= beta, 0, 2))
 
+        # f1: هزینهٔ کل (معادله ۸)
         cost = np.where(dec == 0,
                         np.where(self.y == 1, self.lnp, 0),
                         np.where(dec == 1,
                                  np.where(self.y == 0, self.lpn, 0),
                                  np.where(self.y == 1, u*self.lnp, v*self.lpn)))
         f1 = cost.sum()
-        f2 = np.mean(alpha - beta)
+
+        # f2: جمع پهناهای مرزی (معادله ۱۳)
+        f2 = np.sum(alpha - beta)
+
         out['F'] = [f1, f2]
         out['G'] = [g]
 
