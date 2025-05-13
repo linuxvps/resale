@@ -87,18 +87,19 @@ class Plot:
         G.add_node("Feature Selection\n(انتخاب ویژگی‌های کلیدی)")
         G.add_node("Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")
 
-        G.add_edges_from([("Extract Data\n(استخراج داده‌ها)", "Data Cleaning\n(پاکسازی داده‌ها)"),
-            ("Data Cleaning\n(پاکسازی داده‌ها)", "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)"), (
-            "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)",
-            "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)"), (
-            "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)",
-            "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)"), (
-            "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)",
-            "Correlation Analysis\n(تحلیل همبستگی)"),
-            ("Correlation Analysis\n(تحلیل همبستگی)", "Remove Redundant Features\n(حذف ویژگی‌های تکراری)"),
-            ("Remove Redundant Features\n(حذف ویژگی‌های تکراری)", "Feature Selection\n(انتخاب ویژگی‌های کلیدی)"), (
-            "Feature Selection\n(انتخاب ویژگی‌های کلیدی)",
-            "Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")])
+        G.add_edges_from([("Extract Data\n(استخراج داده‌ها)", "Data Cleaning\n(پاکسازی داده‌ها)"), (
+        "Data Cleaning\n(پاکسازی داده‌ها)", "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)"), (
+                              "Convert to Standard Format\n(تبدیل داده‌ها به قالب استاندارد)",
+                              "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)"), (
+                              "Handle Missing & Invalid Values\n(حذف رکوردهای ناقص/ناصحیح)",
+                              "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)"), (
+                              "Standardize Numeric & Date Columns\n(استانداردسازی داده‌های عددی و تاریخی)",
+                              "Correlation Analysis\n(تحلیل همبستگی)"), (
+                          "Correlation Analysis\n(تحلیل همبستگی)", "Remove Redundant Features\n(حذف ویژگی‌های تکراری)"),
+                          ("Remove Redundant Features\n(حذف ویژگی‌های تکراری)",
+                           "Feature Selection\n(انتخاب ویژگی‌های کلیدی)"), (
+                              "Feature Selection\n(انتخاب ویژگی‌های کلیدی)",
+                              "Preprocessed Data Ready for Modeling\n(داده‌های آماده مدل‌سازی)")])
 
         plt.figure(figsize=(12, 8))
         pos = nx.spring_layout(G, seed=42)
@@ -329,8 +330,7 @@ class Plot:
         plt.show()
 
 
-from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime, Date, String, CHAR, Float
-from datetime import datetime
+from sqlalchemy import Column, BigInteger, Integer, Numeric, DateTime
 
 
 # class ParsianLoan(Base):
@@ -452,9 +452,7 @@ class Loan(Base):
     BRANCH_CODE = Column(Integer, nullable=True)
     FILE_STATUS_TITLE2 = Column(Text, nullable=True)
 
-    __table_args__ = (
-        PrimaryKeyConstraint('LOAN_FILE_NUMBER', 'CUSTOMER_ID'),
-    )
+    __table_args__ = (PrimaryKeyConstraint('LOAN_FILE_NUMBER', 'CUSTOMER_ID'),)
 
     def __repr__(self):
         return f"<Loan(LOAN_FILE_NUMBER={self.LOAN_FILE_NUMBER}, LOAN_AMOUNT={self.LOAN_AMOUNT})>"
@@ -639,7 +637,10 @@ class LoanPreprocessor:
         logger.warning(df[label_column].value_counts())
 
         # فرض بر این است که مقادیر {"مشكوك الوصول", "معوق", "سررسيد گذشته"} => 1
-        default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد", "باطل شده", "درخواست رد شد"}
+        # default_statuses = {"مشكوك الوصول", "معوق", "سررسيد گذشته", "سررسيد", "باطل شده", "درخواست رد شد"}
+        default_statuses = ["ابطال مصوبه ضمانت نامه", "درخواست رد شده", "منقضي شده", "معوق", "مشكوك الوصول",
+                            "سررسيدشده پرداخت نشده", "سررسيد گذشته", "وثيقه ناقص"]
+
         df[label_column] = df[label_column].apply(lambda x: 1 if x in default_statuses else 0)
         # لاگ گرفتن از توزیع داده‌ها
         label_counts = df[label_column].value_counts()
@@ -760,8 +761,8 @@ class LoanPreprocessor:
                 col_min, col_max, col_range, col_mean, col_var, col_std = None, None, None, None, None, None
 
             stats_rows.append({"متغیر": col, "تعداد یکتا": unique_count, "گمشده": missing_count, "مینیموم": col_min,
-                "ماکسیموم": col_max, "دامنه": col_range, "میانگین": col_mean, "واریانس": col_var,
-                "انحراف معیار": col_std})
+                               "ماکسیموم": col_max, "دامنه": col_range, "میانگین": col_mean, "واریانس": col_var,
+                               "انحراف معیار": col_std})
 
         stats_df = pd.DataFrame(stats_rows)
         return stats_df
@@ -939,7 +940,7 @@ class ParsianLossMatrix:
 
             self.cost_matrix.append(
                 {"PP": 0.0, "NN": 0.0, "PN": interest, "NP": principal + interest  # نه ضرب!  جمع طبق مقاله
-                })
+                 })
 
     def get_cost_for_sample(self, index: int):
         """
@@ -1265,17 +1266,18 @@ class ParsianBNDResolver:
                                                  n_jobs=-1)
         elif self.model_type.lower() == "bagging":
             base_estimator = DecisionTreeClassifier(criterion="gini", max_depth=None,  # اجازهٔ رشد کامل
-                min_samples_leaf=2,  # جلوگیری از over‑fitting ریز
-                class_weight="balanced",  # جبران کلاس اقلیت
-                random_state=42)
+                                                    min_samples_leaf=2,  # جلوگیری از over‑fitting ریز
+                                                    class_weight="balanced",  # جبران کلاس اقلیت
+                                                    random_state=42)
 
             # ۲) BaggingClassifier با ۲۰۰ درخت، بوت‌استرپ هم روی نمونه و هم روی ویژگی‌ها
             self.classifier = BaggingClassifier(estimator=base_estimator, n_estimators=200,  # تعداد کیف‌های زیادتر
-                max_samples=0.8,  # ۸۰٪ نمونه‌ها در هر کیف
-                max_features=0.8,  # ۸۰٪ ویژگی‌ها در هر کیف
-                bootstrap=True, bootstrap_features=True,  # بوت‌استرپ ویژگی‌ها برای متنوع‌سازی بیشتر
-                oob_score=True,  # برآورد خطای خارج‌از-کیف
-                n_jobs=-1, random_state=42, verbose=0)
+                                                max_samples=0.8,  # ۸۰٪ نمونه‌ها در هر کیف
+                                                max_features=0.8,  # ۸۰٪ ویژگی‌ها در هر کیف
+                                                bootstrap=True, bootstrap_features=True,
+                                                # بوت‌استرپ ویژگی‌ها برای متنوع‌سازی بیشتر
+                                                oob_score=True,  # برآورد خطای خارج‌از-کیف
+                                                n_jobs=-1, random_state=42, verbose=0)
         else:
             raise ValueError("فعلاً فقط مدل‌های 'stacking' و 'bagging' پشتیبانی می‌شوند.")
 
@@ -1603,7 +1605,7 @@ if __name__ == "__main__":
     repo = LoanRepository()
 
     # ایجاد مدیر پیش‌پردازش (ParsianPreprocessingManager)
-    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=49_000, label_column="FILE_STATUS_TITLE2",
+    prep_manager = ParsianPreprocessingManager(repository=repo, limit_records=513_101, label_column="FILE_STATUS_TITLE2",
                                                imputation_strategy="mean",
                                                need_2_remove_highly_correlated_features=False,
                                                correlation_threshold=0.95, do_balance=True, test_size=0.2,
@@ -1638,14 +1640,14 @@ if __name__ == "__main__":
     all_costs = cost_calc.get_all_costs()
 
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA-II
-    from numpy import array
+    from numpy import arrayد
 
     # ------------------------------------------------------------------
     # 4) گام چهارم: بهینه‌سازی چندهدفه آستانه‌ها با NSGA‑II  (u*, v*)
     # ------------------------------------------------------------------
     threshold_nsgaii = ParsianThresholdNSGA2(probabilities_test=probabilities_test, cost_matrix=all_costs,
-        true_labels=y_test.values,  # یا np.array(y_test)
-        pop_size=50, n_gen=100, step_bnd=False)
+                                             true_labels=y_test.values,  # یا np.array(y_test)
+                                             pop_size=50, n_gen=100, step_bnd=False)
     threshold_nsgaii.optimize()
 
     solutions, objectives = threshold_nsgaii.get_pareto_front()
@@ -1674,8 +1676,8 @@ if __name__ == "__main__":
     # 5) گام پنجم: اعمال تصمیم سه‌راهه با استفاده از (u*, v*)
     # ------------------------------------------------------------------
     threeway = ParsianThreeWayDecision(probabilities_test=probabilities_test, cost_matrix=all_costs,
-        alpha_beta_pair=(best_u, best_v)  # (u*, v*)
-    )
+                                       alpha_beta_pair=(best_u, best_v)  # (u*, v*)
+                                       )
     decisions_final = threeway.apply_three_way_decision()
 
     cnts = threeway.get_decision_counts()
@@ -1685,7 +1687,7 @@ if __name__ == "__main__":
     # 6) گام ششم: تعیین تکلیف نمونه‌های ناحیهٔ مرزی با مدل کمکی
     # ------------------------------------------------------------------
     bnd_resolver = ParsianBNDResolver(x_train_all=x_train, y_train_all=y_train, model_type="bagging"  # یا "stacking"
-    )
+                                      )
     bnd_resolver.fit_bnd_model()
 
     decisions_updated = bnd_resolver.resolve_bnd_samples(x_test, decisions_final)
