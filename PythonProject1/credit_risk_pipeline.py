@@ -29,14 +29,15 @@ from pymoo.optimize import minimize
 # ----------------------------------------------------------------------
 # پارامترهای کلی؛ در صورت نیاز مقداردهی دوباره کنید
 # ----------------------------------------------------------------------
-DATA_FILE = Path(__file__).with_suffix('') / 'ln_loans.xlsx'
+os.environ["LOKY_MAX_CPU_COUNT"] = "8"
+DATA_FILE = r'C:\Users\nima\data\ln_loans.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'          # وضعیت واقعی وام (پیش‌فرض/غیردرزمان)
 LOAN_AMT_COL = 'LOAN_AMOUNT'              # اصل وام
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'  # نرخ سود سالانه به درصد
 DURATION_Y_COL = 'LOAN_DURATION_YEAR'     # مدت به سال؛ اگر وجود ندارد عدد ثابت دهید
 
-GOOD_LABELS = {'فعال'}           # وام سالم
-BAD_LABELS = {'سررسید گذشته', 'مشکوک الوصول', 'سوخت شده'}   # نکول
+GOOD_LABELS = { 'فعال', 'پرداخت شده كامل', 'ضمانت نامه صادر شده', 'خاتمه عادي', 'اعطاء كامل', 'اعطاء  ناقص', 'باطل شده', 'جاري' }# وام سالم
+BAD_LABELS = { 'سررسيد گذشته', 'مشكوك الوصول', 'وثيقه ناقص', 'سررسيد', 'معوق', 'منقضي شده', 'ابطال مصوبه ضمانت نامه', 'درخواست رد شده', 'سررسيدشده پرداخت نشده' } # نکول
 
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
@@ -68,8 +69,14 @@ def yearly_interest(amt, rate_pct, years):
     return amt * (rate_pct / 100.0) * years
 
 def preprocess(df):
-    """حذف ستون‌های بسیار ناقص، تکمیل مقادیر و وان‌هات."""
     df = df.dropna(axis=1, thresh=int(len(df) * 0.2)).copy()
+
+    # تبدیل LOAN_DATE به تایم‌استمپ
+    if 'LOAN_DATE' in df.columns:
+        df['LOAN_DATE'] = pd.to_datetime(df['LOAN_DATE'], errors='coerce')
+        df['loan_timestamp'] = df['LOAN_DATE'].view('int64') // 10**9  # تبدیل به ثانیه
+        df = df.drop(columns=['LOAN_DATE'])
+
     num_cols = df.select_dtypes(include=['number']).columns
     cat_cols = [c for c in df.columns if c not in num_cols]
 
@@ -81,11 +88,13 @@ def preprocess(df):
     df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
     return df
 
+
 # ----------------------------------------------------------------------
 # بارگذاری و آماده‌سازی داده‌ها
 # ----------------------------------------------------------------------
 print('Reading data …')
 data = pd.read_excel(DATA_FILE)
+data = data.dropna(axis=1, how='all')
 
 # برچسب‌گذاری
 data['label'] = data[TARGET_COL].apply(persian_status_to_label)
