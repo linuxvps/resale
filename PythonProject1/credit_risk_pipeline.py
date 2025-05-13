@@ -1,47 +1,47 @@
 # -*- coding: utf-8 -*-
 """
-credit_risk_pipeline.py
-پیاده‌سازی کامل مدل «ارزیابی ریسک اعتباری ترکیبی مبتنی بر تصمیم‌گیری سه‌راهه و
-بهینه‌سازی NSGA‑II» مطابق مقالهٔ مرجع. کد به‌صورت مستقل اجرا می‌شود:
-
-    python credit_risk_pipeline.py
-
-پیش‌نیازهای پایتون: lightgbm, imbalanced‑learn, pymoo, pandas, numpy.
+credit_risk_pipeline_refined.py
+پیاده‌سازی کامل مدل سه‌راهه بهینه‌شده با NSGA‑II
+اجرای مستقل:  python credit_risk_pipeline_refined.py
 """
-import warnings
 
+import warnings
 warnings.filterwarnings('ignore')
 
 import os
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import balanced_accuracy_score, roc_auc_score
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score, confusion_matrix
 import lightgbm as lgb
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.termination import get_termination
 from pymoo.optimize import minimize
 
-# ----------------------------------------------------------------------
-# پارامترهای کلی؛ در صورت نیاز مقداردهی دوباره کنید
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------
+# پارامترهای قابل تغییر
+# ------------------------------------------------------------------
 os.environ["LOKY_MAX_CPU_COUNT"] = "8"
-DATA_FILE = r'C:\Users\nima\data\ln_loans.xlsx'
-TARGET_COL = 'FILE_STATUS_TITLE2'          # وضعیت واقعی وام (پیش‌فرض/غیردرزمان)
-LOAN_AMT_COL = 'LOAN_AMOUNT'              # اصل وام
-INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'  # نرخ سود سالانه به درصد
-DURATION_Y_COL = 'LOAN_DURATION_YEAR'     # مدت به سال؛ اگر وجود ندارد عدد ثابت دهید
 
-GOOD_LABELS = { 'فعال', 'پرداخت شده كامل', 'ضمانت نامه صادر شده', 'خاتمه عادي', 'اعطاء كامل', 'اعطاء  ناقص', 'باطل شده', 'جاري' }# وام سالم
-BAD_LABELS = { 'سررسيد گذشته', 'مشكوك الوصول', 'وثيقه ناقص', 'سررسيد', 'معوق', 'منقضي شده', 'ابطال مصوبه ضمانت نامه', 'درخواست رد شده', 'سررسيدشده پرداخت نشده' } # نکول
+DATA_FILE = r'C:\Users\nima\data\ln_loans.xlsx'
+TARGET_COL = 'FILE_STATUS_TITLE2'
+LOAN_AMT_COL = 'LOAN_AMOUNT'
+INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
+DURATION_Y_COL = 'LOAN_DURATION_YEAR'   # اگر وجود ندارد ثابت 1 لحاظ می‌شود
+
+GOOD_LABELS = {'فعال', 'پرداخت شده كامل', 'ضمانت نامه صادر شده',
+               'خاتمه عادي', 'اعطاء كامل', 'اعطاء  ناقص', 'باطل شده', 'جاري'}
+BAD_LABELS = {'سررسيد گذشته', 'مشكوك الوصول', 'وثيقه ناقص', 'سررسيد',
+              'معوق', 'منقضي شده', 'ابطال مصوبه ضمانت نامه',
+              'درخواست رد شده', 'سررسيدشده پرداخت نشده'}
 
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 SMOTE_K = 5
+
 LGB_PARAMS = dict(objective='binary',
                   metric='None',
                   n_estimators=300,
@@ -49,13 +49,13 @@ LGB_PARAMS = dict(objective='binary',
                   max_depth=-1,
                   random_state=RANDOM_STATE)
 
-NSGA_POP = 100        # اندازه جمعیت
-NSGA_GEN = 200        # تکرارها
+NSGA_POP = 100
+NSGA_GEN = 200
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------
 # توابع کمکی
-# ----------------------------------------------------------------------
-def persian_status_to_label(s):
+# ------------------------------------------------------------------
+def status_to_label(s):
     if pd.isna(s):
         return 1
     s = str(s).strip()
@@ -63,18 +63,20 @@ def persian_status_to_label(s):
         return 0
     if s in BAD_LABELS:
         return 1
-    return 1  # پیش‌فرض: مشکوک
+    return 1
 
-def yearly_interest(amt, rate_pct, years):
-    return amt * (rate_pct / 100.0) * years
+def yearly_interest(amount, rate_pct, years):
+    return amount * (rate_pct / 100.0) * years
 
 def preprocess(df):
-    df = df.dropna(axis=1, thresh=int(len(df) * 0.2)).copy()
+    df = df.dropna(axis=1, thresh=int(len(df)*0.2)).copy()
 
-    # تبدیل LOAN_DATE به تایم‌استمپ
+    # تبدیل تاریخ وام به ثانیه
     if 'LOAN_DATE' in df.columns:
         df['LOAN_DATE'] = pd.to_datetime(df['LOAN_DATE'], errors='coerce')
-        df['loan_timestamp'] = df['LOAN_DATE'].view('int64') // 10**9  # تبدیل به ثانیه
+        df['loan_timestamp'] = df['LOAN_DATE'].astype('int64') // 10**9
+        df['loan_timestamp'] = df['loan_timestamp'].replace(
+            -9223372036, np.nan).fillna(df['loan_timestamp'].median())
         df = df.drop(columns=['LOAN_DATE'])
 
     num_cols = df.select_dtypes(include=['number']).columns
@@ -85,135 +87,124 @@ def preprocess(df):
     for c in cat_cols:
         df[c] = df[c].fillna(df[c].mode().iloc[0])
 
-    df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
-    return df
+    return pd.get_dummies(df, columns=cat_cols, drop_first=True)
 
-
-# ----------------------------------------------------------------------
-# بارگذاری و آماده‌سازی داده‌ها
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------
+# بارگذاری داده
+# ------------------------------------------------------------------
 print('Reading data …')
-data = pd.read_excel(DATA_FILE)
-data = data.dropna(axis=1, how='all')
+df = pd.read_excel(DATA_FILE).dropna(axis=1, how='all')
 
-# برچسب‌گذاری
-data['label'] = data[TARGET_COL].apply(persian_status_to_label)
+df['label'] = df[TARGET_COL].apply(status_to_label)
 
-# درآمد سودی تخمینی برای هر وام طبق فرمول مقاله
-years = data.get(DURATION_Y_COL, pd.Series(np.ones(len(data))))
-data['interest_cash'] = yearly_interest(data[LOAN_AMT_COL], data[INTEREST_RATE_COL], years)
+# تکمیل ستون‌های اصلی قبل از بهره
+df[LOAN_AMT_COL] = pd.to_numeric(df[LOAN_AMT_COL], errors='coerce').fillna(
+    df[LOAN_AMT_COL].mean())
+df[INTEREST_RATE_COL] = pd.to_numeric(df[INTEREST_RATE_COL],
+                                      errors='coerce').fillna(
+    df[INTEREST_RATE_COL].mean())
 
-# استخراج فقط ستون‌های تحلیلی (بقیه با وان‌هات رمزگذاری می‌شوند)
-model_df = preprocess(data.drop(columns=[TARGET_COL]))
+years_series = pd.to_numeric(df.get(DURATION_Y_COL, 1),
+                             errors='coerce').fillna(1)
+
+df['interest_cash'] = yearly_interest(df[LOAN_AMT_COL],
+                                      df[INTEREST_RATE_COL],
+                                      years_series)
+
+model_df = preprocess(df.drop(columns=[TARGET_COL]))
 
 X = model_df.drop(columns=['label', 'interest_cash', LOAN_AMT_COL])
 y = model_df['label']
 
 x_train, x_test, y_train, y_test = train_test_split(
-    X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
-)
+    X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE)
 
-# بالانس کلاس‌ها با SMOTE
+# بالانس
 sm = SMOTE(k_neighbors=SMOTE_K, random_state=RANDOM_STATE)
 x_train_bal, y_train_bal = sm.fit_resample(x_train, y_train)
 
-# ----------------------------------------------------------------------
-# آموزش LGBM و محاسبه احتمال نکول
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------
+# آموزش مدل احتمالات پیش‌فرض
+# ------------------------------------------------------------------
 print('Training LightGBM …')
 clf = lgb.LGBMClassifier(**LGB_PARAMS)
 clf.fit(x_train_bal, y_train_bal)
 
-prob_test = clf.predict_proba(x_test)[:, 1]  # P(default)
+prob_test = clf.predict_proba(x_test)[:, 1]
 
-# بردار مقادیر پولی برای lambda‌ها
-loan_amt = data.loc[x_test.index, LOAN_AMT_COL].values
-interest = data.loc[x_test.index, 'interest_cash'].values
+loan_amt = df.loc[x_test.index, LOAN_AMT_COL].values
+interest = df.loc[x_test.index, 'interest_cash'].values
 
-lambda_NP = loan_amt + interest      # پذیرشِ مقصر
-lambda_PN = interest                 # ردِ بی‌مقصر
+lambda_NP = loan_amt + interest
+lambda_PN = interest
 
-# ----------------------------------------------------------------------
-# تعریف مسئله بهینه‌سازی دوهدفه دقیق طبق مقاله
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------
+# مسئله بهینه‌سازی
+# ------------------------------------------------------------------
 class ThresholdProblem(ElementwiseProblem):
-    def __init__(self, y_true, p_def, lam_NP, lam_PN):
-        super().__init__(n_var=2,
-                         n_obj=2,
-                         n_constr=1,
-                         xl=np.array([0.0, 0.0]),
-                         xu=np.array([1.0, 1.0]))
-        self.y = y_true
-        self.p = p_def
-        self.lnp = lam_NP
-        self.lpn = lam_PN
+    def __init__(self, y, p, lnp, lpn):
+        super().__init__(n_var=2, n_obj=2, n_constr=1,
+                         xl=np.array([0., 0.]), xu=np.array([1., 1.]))
+        self.y, self.p, self.lnp, self.lpn = y, p, lnp, lpn
 
-    def _evaluate(self, x, out, *args, **kwargs):
+    def _evaluate(self, x, out, *_):
         u, v = x
-        # قید اصلی
-        g = u + v - 1.0
+        # قید u+v≤1
+        g = u + v - 1
 
-        # آستانه‌های نمونه‌ای طبق فرمول (Eq. 5)
-        alpha = (self.lpn - v * self.lpn) / (
-                u * self.lnp - v * self.lpn + self.lpn)
-        beta = (v * self.lpn) / (
-                v * self.lpn + self.lnp - u * self.lnp)
+        alpha = (self.lpn - v*self.lpn) / (u*self.lnp - v*self.lpn + self.lpn)
+        beta = (v*self.lpn) / (v*self.lpn + self.lnp - u*self.lnp)
 
-        # تصمیم سه‌راهه
-        pred = np.where(self.p >= alpha, 1,
-                        np.where(self.p <= beta, 0, 2))  # 2 = BND
+        decision = np.where(self.p >= alpha, 1,
+                            np.where(self.p <= beta, 0, 2))
 
-        # f1: هزینهٔ کل (Eq. 8)
-        cost = np.where(pred == 0,
-                        np.where(self.y == 1, self.lnp, 0),  # پذیرش اشتباه
-                        np.where(pred == 1,
-                                 np.where(self.y == 0, self.lpn, 0),  # رد اشتباه
-                                 np.where(pred == 2,
-                                          np.where(self.y == 1,
-                                                   u * self.lnp,
-                                                   v * self.lpn),
-                                          0)))
+        # f1: هزینه کل
+        cost = np.where(decision == 0,
+                        np.where(self.y == 1, self.lnp, 0),
+                        np.where(decision == 1,
+                                 np.where(self.y == 0, self.lpn, 0),
+                                 np.where(self.y == 1, u*self.lnp, v*self.lpn)))
         f1 = cost.sum()
 
-        # f2: اندازه مرزی
-        f2 = (alpha - beta).sum()
+        # f2: میانگین پهنای مرزی
+        f2 = np.mean(alpha - beta)
 
         out['F'] = [f1, f2]
         out['G'] = [g]
 
 print('Running NSGA‑II …')
 problem = ThresholdProblem(y_test.values, prob_test, lambda_NP, lambda_PN)
-algo = NSGA2(pop_size=NSGA_POP, eliminate_duplicates=True)
-res = minimize(problem,
-               algo,
-               get_termination('n_gen', NSGA_GEN),
-               seed=RANDOM_STATE,
-               verbose=False)
+algorithm = NSGA2(pop_size=NSGA_POP, eliminate_duplicates=True)
+result = minimize(problem,
+                  algorithm,
+                  get_termination('n_gen', NSGA_GEN),
+                  seed=RANDOM_STATE,
+                  verbose=False)
 
-# گزینش بهترین راه‌حل (کمترین f2 سپس f1)
-obj = res.F
-idx = np.lexsort((obj[:, 0], obj[:, 1]))  # ابتدا f2 سپس f1
-u_star, v_star = res.X[idx[0]]
+# بهترین جواب: حداقل f2 سپس f1
+idx = np.lexsort((result.F[:, 0], result.F[:, 1]))
+u_star, v_star = result.X[idx[0]]
 print(f'Optimal (u*, v*) = ({u_star:.4f}, {v_star:.4f})')
 
-# ----------------------------------------------------------------------
-# ارزیابی نهایی
-# ----------------------------------------------------------------------
-def classify(p, alpha, beta):
-    return np.where(p >= alpha, 1,
-                    np.where(p <= beta, 0, 2))
+# ------------------------------------------------------------------
+# ارزیابی
+# ------------------------------------------------------------------
+alpha_star = (lambda_PN - v_star*lambda_PN) / (
+        u_star*lambda_NP - v_star*lambda_PN + lambda_PN)
+beta_star = (v_star*lambda_PN) / (
+        v_star*lambda_PN + lambda_NP - u_star*lambda_NP)
 
-alpha_star = (lambda_PN - v_star * lambda_PN) / (
-        u_star * lambda_NP - v_star * lambda_PN + lambda_PN)
-beta_star = (v_star * lambda_PN) / (
-        v_star * lambda_PN + lambda_NP - u_star * lambda_NP)
+final_decision = np.where(prob_test >= alpha_star, 1,
+                          np.where(prob_test <= beta_star, 0, 2))
 
-pred_final = classify(prob_test, alpha_star, beta_star)
-
-# تبدیل سه‌کلاسه به دودویی برای متریک BAC:
-pred_binary = np.where(pred_final == 2, 1, pred_final)  # تعویق را خطا فرض می‌کنیم
-bac = balanced_accuracy_score(y_test, pred_binary)
+binary_pred = np.where(final_decision == 2, 1, final_decision)
+bac = balanced_accuracy_score(y_test, binary_pred)
 auc = roc_auc_score(y_test, prob_test)
 
 print(f'Balanced Accuracy = {bac:.4f}')
-print(f'AUC              = {auc:.4f}')
+print(f'AUC               = {auc:.4f}')
+
+# ماتریس سه‌راهه برای اطلاع بیشتر
+cm = confusion_matrix(y_test, final_decision,
+                      labels=[1, 0, 2])  # ترتیب: default, good, border
+print('Confusion Matrix (rows: true 1/0):\n', cm)
