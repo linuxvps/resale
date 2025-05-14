@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-credit_risk_pipeline_cv5.py
-همان مدل سه‌راهه + NSGA‑II + استکینگ، این بار با ۵‑Fold CV
+credit_risk_pipeline_cv5_corr.py
+سه‌راهه + NSGA‑II + استکینگ با ۵‑Fold CV
+و حذف ویژگی‌های با همبستگی شدید (|ρ| > 0.95)
 """
 
 import warnings, os, numpy as np, pandas as pd
 warnings.filterwarnings('ignore')
 
-from pathlib import Path
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import StratifiedKFold, KFold
-from sklearn.metrics import (balanced_accuracy_score, roc_auc_score,
-                             confusion_matrix)
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                               AdaBoostClassifier, ExtraTreesClassifier,
@@ -23,7 +22,7 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.termination import get_termination
 from pymoo.optimize import minimize
 
-# ---------- پیکره‌بندی کلی ----------
+# ──────────────── پیکره‌بندی ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
 DATA_FILE          = r'C:\Users\nima\data\ln_loans.xlsx'
 TARGET_COL         = 'FILE_STATUS_TITLE2'
@@ -39,12 +38,15 @@ BAD_LABELS  = {'سررسيد گذشته', 'مشكوك الوصول', 'وثيقه
 
 RANDOM_STATE = 42
 SMOTE_K      = 5
+THRESH_CORR  = 0.95
+TOP_N_FEATS  = 20
+
 LGB_PARAMS   = dict(objective='binary', metric='None',
                     n_estimators=300, learning_rate=0.05,
                     max_depth=-1, random_state=RANDOM_STATE)
-NSGA_POP, NSGA_GEN, EPS = 100, 200, 1e-6     # قید u+v<1
+NSGA_POP, NSGA_GEN, EPS = 100, 200, 1e-6
 
-# ---------- توابع پایه ----------
+# ──────────────── توابع پایه ────────────────
 def status_to_label(s):
     if pd.isna(s): return 1
     s = str(s).strip()
@@ -52,6 +54,12 @@ def status_to_label(s):
 
 def yearly_interest(amount, rate_pct, years):
     return amount * (rate_pct/100) * years
+
+def drop_high_corr(df_num, thresh=THRESH_CORR):
+    corr = df_num.corr().abs()
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+    to_drop = [c for c in upper.columns if any(upper[c] > thresh)]
+    return df_num.drop(columns=to_drop), to_drop
 
 def preprocess(df):
     df = df.dropna(axis=1, thresh=int(len(df)*0.2)).copy()
@@ -84,47 +92,54 @@ class ThresholdProblem(ElementwiseProblem):
                         np.where(dec==1,
                                  np.where(self.y==0,self.lpn,0),
                                  np.where(self.y==1,u*self.lnp,v*self.lpn)))
-        f1 = cost.sum()
-        f2 = np.sum(a-b)
-        out['F'], out['G'] = [f1,f2],[g]
+        out['F'] = [cost.sum(), np.sum(a-b)]
+        out['G'] = [g]
 
 def pick_solution(res, y, p, lnp, lpn):
-    best_i,best_bnd,best_f1 = None,np.inf,np.inf
-    for i,(u,v) in enumerate(res.X):
+    best_i, best_bnd, best_f1 = None, np.inf, np.inf
+    for i, (u, v) in enumerate(res.X):
         a = (lpn-v*lpn)/(u*lnp - v*lpn + lpn)
         b = (v*lpn)/(v*lpn + lnp - u*lnp)
         bnd = np.sum((p>b)&(p<a))
         if bnd<best_bnd or (bnd==best_bnd and res.F[i,0]<best_f1):
-            best_i,best_bnd,best_f1=i,bnd,res.F[i,0]
+            best_i, best_bnd, best_f1 = i, bnd, res.F[i,0]
     return res.X[best_i]
 
-# ---------- آماده‌سازی داده یک‌بار برای همیشه ----------
+# ──────────────── بارگذاری و حذف همبستگی ────────────────
 print('Reading & preprocessing data …')
 raw = pd.read_excel(DATA_FILE).dropna(axis=1, how='all')
 raw['label'] = raw[TARGET_COL].apply(status_to_label)
+
 raw[LOAN_AMT_COL]      = pd.to_numeric(raw[LOAN_AMT_COL],
-                                       errors='coerce').fillna(
-                                       raw[LOAN_AMT_COL].mean())
+                                       errors='coerce').fillna(raw[LOAN_AMT_COL].mean())
 raw[INTEREST_RATE_COL] = pd.to_numeric(raw[INTEREST_RATE_COL],
-                                       errors='coerce').fillna(
-                                       raw[INTEREST_RATE_COL].mean())
-years = pd.to_numeric(raw.get(DURATION_Y_COL,1),
-                      errors='coerce').fillna(1)
+                                       errors='coerce').fillna(raw[INTEREST_RATE_COL].mean())
+years = pd.to_numeric(raw.get(DURATION_Y_COL,1), errors='coerce').fillna(1)
+
+# حذف همبستگی
+num_cols = raw.select_dtypes(include=['number']).columns
+raw_num_filt, dropped_cols = drop_high_corr(raw[num_cols])
+print(f'Removed {len(dropped_cols)} highly‑correlated features (|ρ| > {THRESH_CORR}):')
+for c in dropped_cols: print('   -', c)
+
+raw.drop(columns=dropped_cols, inplace=True)          # حذف از دیتای اصلی
+raw[raw_num_filt.columns] = raw_num_filt              # درج نسخه پالایش‌شده
+
+# **بازمحاسبه interest_cash** (ممکن است حذف شده باشد)
 raw['interest_cash'] = yearly_interest(raw[LOAN_AMT_COL],
                                        raw[INTEREST_RATE_COL], years)
 
+# تبدیل نهایی
 df = preprocess(raw.drop(columns=[TARGET_COL]))
 X_full = df.drop(columns=['label','interest_cash',LOAN_AMT_COL])
 y_full = df['label']
 
-# ---------- استکینگ مشترک (برای سرعت، خارج فولد آموزش می‌دهیم) ----------
-base = [('rf',  RandomForestClassifier(n_estimators=200,
-                                       random_state=RANDOM_STATE)),
+# ──────────────── تعریف استکینگ ────────────────
+base = [('rf',  RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
         ('xgb', XGBClassifier(n_estimators=300, random_state=RANDOM_STATE,
                               eval_metric='logloss', use_label_encoder=False)),
         ('gbdt',GradientBoostingClassifier(random_state=RANDOM_STATE)),
-        ('ert', ExtraTreesClassifier(n_estimators=200,
-                                     random_state=RANDOM_STATE)),
+        ('ert', ExtraTreesClassifier(n_estimators=200, random_state=RANDOM_STATE)),
         ('ada', AdaBoostClassifier(random_state=RANDOM_STATE))]
 stack_clf = StackingClassifier(estimators=base,
                                final_estimator=LogisticRegression(max_iter=1000),
@@ -132,39 +147,42 @@ stack_clf = StackingClassifier(estimators=base,
                                         random_state=RANDOM_STATE),
                                n_jobs=-1)
 
-# ---------- حلقهٔ ۵‑Fold ----------
+# ──────────────── ۵‑Fold CV ────────────────
 kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-metrics = []   # هر ردیف: [BAcc, GM, FM, AUC, Cost]
+metrics, importances = [], []
 
 print('\n===== 5‑Fold Cross‑Validation =====')
-for fold,(tr_idx,te_idx) in enumerate(kf.split(X_full, y_full),1):
+for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     X_tr, X_te = X_full.iloc[tr_idx], X_full.iloc[te_idx]
     y_tr, y_te = y_full.iloc[tr_idx], y_full.iloc[te_idx]
 
-    # مرحله LGBM
-    X_bal,y_bal = SMOTE(k_neighbors=SMOTE_K,random_state=RANDOM_STATE)\
-                    .fit_resample(X_tr,y_tr)
-    lgb_clf = lgb.LGBMClassifier(**LGB_PARAMS).fit(X_bal,y_bal)
-    prob_te = lgb_clf.predict_proba(X_te)[:,1]
+    # LGBM
+    X_bal, y_bal = SMOTE(k_neighbors=SMOTE_K, random_state=RANDOM_STATE)\
+                     .fit_resample(X_tr, y_tr)
+    lgb_clf = lgb.LGBMClassifier(**LGB_PARAMS).fit(X_bal, y_bal)
+    prob_te = lgb_clf.predict_proba(X_te)[:, 1]
+
+    importances.append(pd.DataFrame({'feature': X_bal.columns,
+                                     'importance': lgb_clf.feature_importances_,
+                                     'fold': fold}))
 
     lam_NP = (raw.loc[X_te.index, LOAN_AMT_COL] +
               raw.loc[X_te.index, 'interest_cash']).values
     lam_PN = raw.loc[X_te.index, 'interest_cash'].values
 
-    # NSGA‑II
     res = minimize(ThresholdProblem(y_te.values, prob_te, lam_NP, lam_PN),
                    NSGA2(pop_size=NSGA_POP, eliminate_duplicates=True),
                    get_termination('n_gen', NSGA_GEN),
                    seed=RANDOM_STATE, verbose=False)
-    u_star,v_star = pick_solution(res, y_te.values, prob_te, lam_NP, lam_PN)
+    u_star, v_star = pick_solution(res, y_te.values, prob_te, lam_NP, lam_PN)
 
     alpha = (lam_PN - v_star*lam_PN)/(u_star*lam_NP - v_star*lam_PN + lam_PN)
     beta  = (v_star*lam_PN)/(v_star*lam_PN + lam_NP - u_star*lam_NP)
+
     region = np.where(prob_te>=alpha,'POS',
                       np.where(prob_te<=beta,'NEG','BND'))
 
-    # استکینگ فقط روی BND
-    stack_clf.fit(X_tr,y_tr)
+    stack_clf.fit(X_tr, y_tr)
     final_pred = np.empty_like(y_te.values)
     final_pred[region=='POS'] = 1
     final_pred[region=='NEG'] = 0
@@ -172,8 +190,7 @@ for fold,(tr_idx,te_idx) in enumerate(kf.split(X_full, y_full),1):
     if bnd_idx.size:
         final_pred[bnd_idx] = stack_clf.predict(X_te.iloc[bnd_idx])
 
-    tn,fp,fn,tp = confusion_matrix(y_te,final_pred,
-                                   labels=[0,1]).ravel()
+    tn, fp, fn, tp = confusion_matrix(y_te, final_pred, labels=[0,1]).ravel()
     rec_d = tp/(tp+fn) if tp+fn else 0
     rec_n = tn/(tn+fp) if tn+fp else 0
     prec  = tp/(tp+fp) if tp+fp else 0
@@ -181,17 +198,25 @@ for fold,(tr_idx,te_idx) in enumerate(kf.split(X_full, y_full),1):
     FM    = 2*prec*rec_d/(prec+rec_d) if prec+rec_d else 0
     GM    = np.sqrt(rec_d*rec_n)
     AUC   = roc_auc_score(y_te, prob_te)
-    cost_vec = np.where(y_te==1,
-                        np.where(final_pred==1,0,lam_NP),
-                        np.where(final_pred==0,0,lam_PN))
-    Cost  = cost_vec.sum()
-    metrics.append([BAcc,GM,FM,AUC,Cost])
+    Cost  = np.where(y_te==1,
+                     np.where(final_pred==1,0,lam_NP),
+                     np.where(final_pred==0,0,lam_PN)).sum()
+    metrics.append([BAcc, GM, FM, AUC, Cost])
 
     print(f'Fold {fold}:  BAcc={BAcc:.4f}  GM={GM:.4f}  '
           f'FM={FM:.4f}  AUC={AUC:.4f}  Cost={Cost:,.0f}')
 
-# ---------- جمع‌بندی ----------
+# ──────────────── خروجی نهایی ────────────────
 m = np.array(metrics)
 print('\n—— 5‑Fold Mean ± Std ——')
-for name,col in zip(['BAcc','GM','FM','AUC','Cost'],m.T):
+for name, col in zip(['BAcc','GM','FM','AUC','Cost'], m.T):
     print(f'{name}: {col.mean():.4f} ± {col.std():.4f}')
+
+imp_df = (pd.concat(importances)
+          .groupby('feature')['importance']
+          .agg(['mean','std'])
+          .sort_values('mean', ascending=False)
+          .head(TOP_N_FEATS).reset_index())
+
+imp_df.to_csv('top20_feature_importance.csv', index=False)
+print('\nTop‑20 features saved → top20_feature_importance.csv')
