@@ -225,7 +225,7 @@ final_pred = np.empty_like(y_te.values)
 # POS → 1 (بدحساب)،  NEG → 0 (خوش‌حساب)
 final_pred[region == 'POS'] = 1
 final_pred[region == 'NEG'] = 0
-# BND → خروجی استکینگ
+# BND→ خروجی استکینگ
 bnd_idx = np.where(region == 'BND')[0]
 if bnd_idx.size:
     final_pred[bnd_idx] = stack_model.predict(x_te.iloc[bnd_idx])
@@ -233,10 +233,40 @@ if bnd_idx.size:
 # ----------------------------------------------------------------------
 # ۶) ارزیابی
 # ----------------------------------------------------------------------
-bac = balanced_accuracy_score(y_te, final_pred)
-auc = roc_auc_score(y_te, prob_te)
-print(f'Balanced Accuracy = {bac:.4f}')
-print(f'AUC               = {auc:.4f}')
+# ----------------------------------------------------------------------
+# ۶) ارزیابی دقیقاً مطابق مقاله
+# ----------------------------------------------------------------------
+from sklearn.metrics import confusion_matrix, roc_auc_score
+
+# 6‑a  ماتریس سردرگمی
+tn, fp, fn, tp = confusion_matrix(y_te, final_pred, labels=[0, 1]).ravel()
+
+# 6‑b  شاخص‌های معادلات (16) تا (18)
+recall_default = tp / (tp + fn) if (tp + fn) else 0          # TP / (TP+FN)
+recall_nondef  = tn / (tn + fp) if (tn + fp) else 0          # TN / (TN+FP)
+precision      = tp / (tp + fp) if (tp + fp) else 0          # برای FM
+
+B_Acc = (recall_default + recall_nondef) / 2                 # Eq. 16
+FM    = (1 + 1**2) * precision * recall_default \
+        / (1**2 * (precision + recall_default)) if (precision + recall_default) else 0  # Eq. 17
+GM    = np.sqrt(recall_default * recall_nondef)              # Eq. 18
+
+# 6‑c  AUC  (Eq. 19)
+AUC = roc_auc_score(y_te, prob_te)                           # همان تعریف کلاسیک
+
+# 6‑d  Decision Cost  (Eq. 20)
+#     برای هر رکوردِ تست، اگر برچسب اشتباه باشد λ_NP یا λ_PN افزوده می‌شود
+cost_vec = np.where(y_te == 1,
+                    np.where(final_pred == 1, 0, lambda_NP),  # پیش‌فرض → λ_NP اگر خطا
+                    np.where(final_pred == 0, 0, lambda_PN)) # غیرپیش‌فرض → λ_PN اگر خطا
+Dec_Cost = cost_vec.sum()
+
+print(f'B_Acc  = {B_Acc:.4f}')
+print(f'FM     = {FM:.4f}')
+print(f'GM     = {GM:.4f}')
+print(f'AUC    = {AUC:.4f}')
+print(f'Cost   = {Dec_Cost:,.0f} IRR')
+print(f'TP={tp}, TN={tn}, FP={fp}, FN={fn}')
 
 # ----------------------------------------------------------------------
 # ۷) ماتریس زیان صریح و ذخیره
