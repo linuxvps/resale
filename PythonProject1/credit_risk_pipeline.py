@@ -333,3 +333,75 @@ imp_df = (pd.concat(importances).groupby('feature')['importance'].agg(['mean', '
     TOP_N_FEATS).reset_index())
 imp_df.to_csv('top20_feature_importance.csv', index=False)
 print('Feature-importance table → top20_feature_importance.csv')
+
+
+# ────────────────── Baseline single-stage models ──────────────────
+from sklearn.svm import SVC
+from sklearn.metrics import confusion_matrix
+
+baseline_models = {
+    'RandomForest': RandomForestClassifier(n_estimators=300,
+                                           random_state=RANDOM_STATE),
+    'XGBoost'     : XGBClassifier(n_estimators=400, random_state=RANDOM_STATE,
+                                  eval_metric='logloss', use_label_encoder=False),
+    'SVM-RBF'     : SVC(probability=True, kernel='rbf', C=2, gamma='scale',
+                        random_state=RANDOM_STATE)
+}
+
+base_metrics = {name: [] for name in baseline_models}   # هر مدل → ۵ ردیف
+
+print('\n===== Baseline comparison (same 5 folds) =====')
+for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
+    X_tr, X_te = X_full.iloc[tr_idx], X_full.iloc[te_idx]
+    y_tr, y_te = y_full.iloc[tr_idx], y_full.iloc[te_idx]
+
+    # λ‌ها برای همان سطرهای تست
+    lam_NP = (raw.loc[X_te.index, LOAN_AMT_COL] +
+              raw.loc[X_te.index, 'interest_cash']).values
+    lam_PN = raw.loc[X_te.index, 'interest_cash'].values
+
+    for name, clf in baseline_models.items():
+        clf.fit(X_tr, y_tr)
+        prob = clf.predict_proba(X_te)[:, 1]
+        pred = (prob >= 0.5).astype(int)    # آستانهٔ ۵۰٪ کلاسیک
+
+        # متریک‌ها
+        tn, fp, fn, tp = confusion_matrix(y_te, pred, labels=[0,1]).ravel()
+        rec_d = tp/(tp+fn) if tp+fn else 0
+        rec_n = tn/(tn+fp) if tn+fp else 0
+        prec  = tp/(tp+fp) if tp+fp else 0
+        BAcc  = (rec_d+rec_n)/2
+        FM    = 2*prec*rec_d/(prec+rec_d) if prec+rec_d else 0
+        GM    = np.sqrt(rec_d*rec_n)
+        AUC   = roc_auc_score(y_te, prob)
+        # هزینه دوکلاسه: فقط λ_NP یا λ_PN
+        Cost  = np.where(y_te==1,
+                         np.where(pred==1,0,lam_NP),
+                         np.where(pred==0,0,lam_PN)).sum()
+
+        base_metrics[name].append([BAcc, GM, FM, AUC, Cost])
+
+    if fold == 1:
+        print('  (fold loop shared با مدل اصلی – baseline نیز اجرا شد)')
+
+# -------- جدول میانگین ± انحراف معیار ----------
+cols = ['BAcc','GM','FM','AUC','Cost']
+print('\n—— Baseline mean ± std over 5 folds ——')
+for name, rows in base_metrics.items():
+    arr = np.array(rows)                     # 5×5
+    means, stds = arr.mean(axis=0), arr.std(axis=0)
+    print(f'\n▶ {name}')
+    for c, μ, σ in zip(cols, means, stds):
+        if c=='Cost':
+            print(f'   {c}: {μ:,.0f} ± {σ:,.0f}')
+        else:
+            print(f'   {c}: {μ:.4f} ± {σ:.4f}')
+
+# ---------- ذخیره در CSV برای پایان‌نامه ----------
+flat = []
+for model, rows in base_metrics.items():
+    for i,row in enumerate(rows,1):
+        flat.append([model, i, *row])
+pd.DataFrame(flat, columns=['Model','Fold',*cols]) \
+  .to_csv('baseline_models_metrics.csv', index=False)
+print('\nBaseline metrics saved → baseline_models_metrics.csv')
