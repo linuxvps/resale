@@ -21,15 +21,14 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.termination import get_termination
 from pymoo.optimize import minimize
 
-pd.set_option('display.max_columns', None)        # نمایش همه ستون‌ها
-pd.set_option('display.expand_frame_repr', False) # جلوگیری از شکستن به چند خط
-pd.set_option('display.width', 200)               # تنظیم عرض کنسول (می‌تونی عدد رو بیشتر هم بذاری)
+pd.set_option('display.max_columns', None)  # نمایش همه ستون‌ها
+pd.set_option('display.expand_frame_repr', False)  # جلوگیری از شکستن به چند خط
+pd.set_option('display.width', 200)  # تنظیم عرض کنسول (می‌تونی عدد رو بیشتر هم بذاری)
 pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی دلخواه
-
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -121,7 +120,18 @@ def compute_metrics(y_true, y_pred, prob, lam_np, lam_pn):
     gm = np.sqrt(rec_d * rec_n)
     auc = roc_auc_score(y_true, prob)
     cost = np.where(y_true == 1, np.where(y_pred == 1, 0, lam_np), np.where(y_pred == 0, 0, lam_pn)).sum()
-    return {'BAcc': bacc, 'FM': fm, 'GM': gm, 'AUC': auc, 'Cost': cost}
+
+    return {
+        'BAcc': bacc,
+        'FM': fm,
+        'GM': gm,
+        'AUC': auc,
+        'Cost': cost,
+        'TP': tp,
+        'TN': tn,
+        'FP': fp,
+        'FN': fn
+    }
 
 
 class ThresholdProblem(ElementwiseProblem):
@@ -225,7 +235,7 @@ else:
     fig1, ax1 = plt.subplots(figsize=(7, 5))
     norm = plt.Normalize(sens_df['NGen'].min(), sens_df['NGen'].max())
     scatter = ax1.scatter(sens_df['PopSize'], sens_df['DecisionCost'], s=sens_df['NumBND'] * 6,  # حباب ∝ تعداد BND
-        c=sens_df['NGen'], cmap=cm.viridis, norm=norm, alpha=0.85, edgecolor='k', linewidth=0.6)
+                          c=sens_df['NGen'], cmap=cm.viridis, norm=norm, alpha=0.85, edgecolor='k', linewidth=0.6)
     ax1.set_xlabel('Population Size', fontsize=11)
     ax1.set_ylabel('Decision Cost (f₁)', fontsize=11)
     ax1.set_title('NSGA-II Sensitivity: Cost vs Population Size', fontsize=12)
@@ -317,7 +327,7 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     cost_after = np.where(final_pred == 0, np.where(y_te == 1, lam_NP, 0), np.where(y_te == 0, lam_PN, 0))
     Cost_after = cost_after.sum()
 
-    metrics.append([BAcc, GM, FM, AUC, Cost_before, Cost_after])
+    metrics.append([BAcc, GM, FM, AUC, Cost_after, tp, tn, fp, fn])
 
     print(f'\033[92mFold {fold}:  BAcc={BAcc:.4f}  GM={GM:.4f}  '
           f'FM={FM:.4f}  AUC={AUC:.4f}  '
@@ -335,13 +345,13 @@ imp_df = (pd.concat(importances).groupby('feature')['importance'].agg(['mean', '
 imp_df.to_csv('top20_feature_importance.csv', index=False)
 print('Feature-importance table → top20_feature_importance.csv')
 
-# ────────────────── Baseline single-stage models ──────────────────
 # ────────────────  Baseline single-stage models ────────────────
 baseline_models = {'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
-    'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss',
-                             use_label_encoder=False), 'SVM-RBF': (
-        lambda: __import__('sklearn.svm', fromlist=['SVC']).SVC(probability=True, kernel='rbf', C=2, gamma='scale',
-                                                                random_state=RANDOM_STATE))()}
+                   'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss'),
+                   'SVM-RBF': (
+                       lambda: __import__('sklearn.svm', fromlist=['SVC']).SVC(probability=True, kernel='rbf', C=2,
+                                                                               gamma='scale',
+                                                                               random_state=RANDOM_STATE))()}
 
 # ارزیابی یکسان مدل‌ها با تابع مشترک
 results = []
@@ -366,6 +376,45 @@ summary = res_df.groupby('Model').agg(['mean', 'std']).reset_index()
 summary = summary.sort_values(('Cost', 'mean'))
 print('\n—— Baseline mean ± std over 5 folds ——')
 print('\033[94m' + summary.to_string() + '\033[0m')
+
+print('444444444444444444444444444444444444444444444444444444')
+import pandas as pd
+
+# ۱) ستون‌های مورد نظر برای ارزیابی
+prop_cols = ['BAcc', 'GM', 'FM', 'AUC', 'Cost', 'TP', 'TN', 'FP', 'FN']
+
+# ۲) ساخت خلاصهٔ مدل پیشنهادی فقط با میانگین
+prop_df = pd.DataFrame(metrics, columns=prop_cols)
+prop_means = prop_df.mean()
+prop_row = {'Method': 'Proposed'}
+for metric in prop_cols:
+    prop_row[metric] = prop_means[metric]
+
+# ۳) ساخت ردیف‌های مدل‌های پایه فقط با میانگین
+base_rows = []
+for model in res_df['Model'].unique():
+    df_model = res_df[res_df['Model'] == model]
+    row = {'Method': model}
+    for metric in prop_cols:
+        if metric in df_model.columns:
+            row[metric] = df_model[metric].mean()
+        else:
+            row[metric] = None
+    base_rows.append(row)
+
+# ۴) ادغام همه در یک جدول نهایی
+final_table = pd.DataFrame(base_rows + [prop_row])
+
+# ۵) مرتب‌سازی و نمایش
+final_table = final_table[['Method', 'BAcc', 'AUC', 'FM', 'GM', 'Cost', 'TP', 'TN', 'FP', 'FN']]
+print('\n—— 📊 جدول مقایسه‌ای مدل‌ها ——')
+print(final_table.to_string(index=False))
+
+# ۶) ذخیره فایل نهایی
+final_table.to_csv('comparison_table.csv', index=False)
+print('✅ جدول نهایی ذخیره شد → comparison_table.csv')
+
+
 # ذخیره خروجی
 res_df.to_csv('baseline_models_metrics.csv', index=False)
 print('Baseline metrics saved → baseline_models_metrics.csv')
