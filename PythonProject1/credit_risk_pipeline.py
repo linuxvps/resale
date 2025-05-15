@@ -121,17 +121,7 @@ def compute_metrics(y_true, y_pred, prob, lam_np, lam_pn):
     auc = roc_auc_score(y_true, prob)
     cost = np.where(y_true == 1, np.where(y_pred == 1, 0, lam_np), np.where(y_pred == 0, 0, lam_pn)).sum()
 
-    return {
-        'BAcc': bacc,
-        'FM': fm,
-        'GM': gm,
-        'AUC': auc,
-        'Cost': cost,
-        'TP': tp,
-        'TN': tn,
-        'FP': fp,
-        'FN': fn
-    }
+    return {'BAcc': bacc, 'FM': fm, 'GM': gm, 'AUC': auc, 'Cost': cost, 'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn}
 
 
 class ThresholdProblem(ElementwiseProblem):
@@ -413,7 +403,6 @@ print(final_table.to_string(index=False))
 # ۶) ذخیره فایل نهایی
 final_table.to_csv('comparison_table.csv', index=False)
 print('✅ جدول نهایی ذخیره شد → comparison_table.csv')
-
 
 # ذخیره خروجی
 res_df.to_csv('baseline_models_metrics.csv', index=False)
