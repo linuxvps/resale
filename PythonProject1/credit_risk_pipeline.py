@@ -22,7 +22,6 @@ from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier
                               ExtraTreesClassifier, StackingClassifier)
 import lightgbm as lgb
 from xgboost import XGBClassifier
-import matplotlib.pyplot as plt
 
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -31,7 +30,7 @@ from pymoo.optimize import minimize
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -94,6 +93,22 @@ def preprocess(df):
         df[c].fillna(df[c].mode().iloc[0], inplace=True)
     return pd.get_dummies(df, columns=cat_cols, drop_first=True)
 
+def plot_pareto_front(res, fold):
+    """ذخیرهٔ شکل جبههٔ پارتو برای فولد مشخص."""
+    import matplotlib.pyplot as plt
+
+    f1, f2 = res.F[:, 0], res.F[:, 1]
+    plt.figure(figsize=(6,4))
+    plt.scatter(f2, f1, c='steelblue', s=25, alpha=0.8, edgecolor='k')
+    plt.gca().invert_xaxis()           # مثل مقاله: f2 کم‌تر سمت راست ببینیم
+    plt.xlabel('f₂  (Border Width ∑(α-β))')
+    plt.ylabel('f₁  (Decision Cost)')
+    plt.title(f'Pareto Front – Fold {fold}')
+    plt.tight_layout()
+    fname = f'pareto_fold{fold}.png'
+    plt.savefig(fname, dpi=300)
+    plt.close()
+    print(f'💾  Pareto front saved → {fname}')
 
 class ThresholdProblem(ElementwiseProblem):
     def __init__(self, y, p, lnp, lpn):
@@ -181,15 +196,55 @@ for pop, ngen in param_grid:
 sens_df = pd.DataFrame(sens_rows, columns=['PopSize', 'NGen', 'DecisionCost', 'NumBND', 'Seconds'])
 sens_df.to_csv('nsga_sensitivity.csv', index=False)
 
-plt.scatter(sens_df['PopSize'], sens_df['DecisionCost'])
-for _, r in sens_df.iterrows():
-    plt.text(r.PopSize, r.DecisionCost, f'{r.NGen}g', ha='right', fontsize=8)
-plt.xlabel('Population Size');
-plt.ylabel('Decision Cost (f1)')
-plt.title('NSGA-II Parameter Sensitivity (Fold 1)')
-plt.tight_layout();
-plt.savefig('nsga_sensitivity.png', dpi=300)
-print('Sensitivity outputs → nsga_sensitivity.csv / .png')
+# plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
+# اگر مرحلهٔ حساسیت قبلاً اجرا و csv ساخته نشده بود، این بخش را رد کنید
+try:
+    sens_df = pd.read_csv('nsga_sensitivity.csv')
+except FileNotFoundError:
+    print('⚠️  nsga_sensitivity.csv not found — skip plotting')
+else:
+    # ---------- Figure 1: Decision Cost vs Population Size (Bubble chart) ----------
+    fig1, ax1 = plt.subplots(figsize=(7, 5))
+    norm = plt.Normalize(sens_df['NGen'].min(), sens_df['NGen'].max())
+    scatter = ax1.scatter(
+        sens_df['PopSize'],
+        sens_df['DecisionCost'],
+        s=sens_df['NumBND']*6,                 # حباب ∝ تعداد BND
+        c=sens_df['NGen'],
+        cmap=cm.viridis, norm=norm,
+        alpha=0.85, edgecolor='k', linewidth=0.6
+    )
+    ax1.set_xlabel('Population Size', fontsize=11)
+    ax1.set_ylabel('Decision Cost (f₁)', fontsize=11)
+    ax1.set_title('NSGA-II Sensitivity: Cost vs Population Size', fontsize=12)
+    for _, r in sens_df.iterrows():
+        ax1.text(r.PopSize, r.DecisionCost,
+                 f"BND={r.NumBND}", fontsize=8, ha='left', va='bottom')
+    cbar = fig1.colorbar(scatter, ax=ax1, pad=0.02)
+    cbar.set_label('Number of Generations', fontsize=10)
+    fig1.tight_layout()
+    fig1.savefig('nsga_sensitivity_cost.png', dpi=300)
+
+    # ---------- Figure 2: Runtime vs Population Size ----------
+    fig2, ax2 = plt.subplots(figsize=(7, 4))
+    ax2.plot(sens_df['PopSize'], sens_df['Seconds'],
+             marker='o', linestyle='-', color='#1f77b4')
+    for _, r in sens_df.iterrows():
+        ax2.text(r.PopSize, r.Seconds,
+                 f"{r.Seconds:.1f}s", fontsize=8, ha='center', va='bottom')
+    ax2.set_xlabel('Population Size', fontsize=11)
+    ax2.set_ylabel('Runtime (seconds)', fontsize=11)
+    ax2.set_title('NSGA-II Sensitivity: Runtime vs Population Size', fontsize=12)
+    fig2.tight_layout()
+    fig2.savefig('nsga_sensitivity_runtime.png', dpi=300)
+
+    print('📊  Figures saved → nsga_sensitivity_cost.png / nsga_sensitivity_runtime.png')
+
+# plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
 
 # ────────────────  تعریف استکینگ مشترک ────────────────
 base = [('rf', RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
@@ -223,6 +278,8 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     res = minimize(ThresholdProblem(y_te.values, prob_te, lam_NP, lam_PN),
                    NSGA2(pop_size=NSGA_POP, eliminate_duplicates=True), get_termination('n_gen', NSGA_GEN),
                    seed=RANDOM_STATE, verbose=False)
+    plot_pareto_front(res, fold)
+
     u_star, v_star = pick_solution(res, y_te.values, prob_te, lam_NP, lam_PN)
 
     alpha = (lam_PN - v_star * lam_PN) / (u_star * lam_NP - v_star * lam_PN + lam_PN)
@@ -246,11 +303,24 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     FM = 2 * prec * rec_d / (prec + rec_d) if prec + rec_d else 0
     GM = np.sqrt(rec_d * rec_n)
     AUC = roc_auc_score(y_te, prob_te)
-    Cost = np.where(y_te == 1, np.where(final_pred == 1, 0, lam_NP), np.where(final_pred == 0, 0, lam_PN)).sum()
-    metrics.append([BAcc, GM, FM, AUC, Cost])
 
-    print(f'Fold {fold}:  BAcc={BAcc:.4f}  GM={GM:.4f}  '
-          f'FM={FM:.4f}  AUC={AUC:.4f}  Cost={Cost:,.0f}')
+    cost_before = np.where(region == 'POS',
+                           np.where(y_te == 0, lam_PN, 0),
+                           np.where(region == 'NEG',
+                                    np.where(y_te == 1, lam_NP, 0),
+                                    np.where(y_te == 1, u_star * lam_NP, v_star * lam_PN)))
+    Cost_before = cost_before.sum()
+
+    cost_after = np.where(final_pred == 0,
+                          np.where(y_te == 1, lam_NP, 0),
+                          np.where(y_te == 0, lam_PN, 0))
+    Cost_after = cost_after.sum()
+
+    metrics.append([BAcc, GM, FM, AUC, Cost_before, Cost_after])
+
+    print(f'\033[92mFold {fold}:  BAcc={BAcc:.4f}  GM={GM:.4f}  '
+          f'FM={FM:.4f}  AUC={AUC:.4f}  '
+          f'Cost_before={Cost_before:,.0f}  Cost_after={Cost_after:,.0f}\033[0m')
 
 # ────────────────  خروجی نهایی جدول‌ها ────────────────
 m = np.array(metrics)
