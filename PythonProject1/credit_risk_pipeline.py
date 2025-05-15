@@ -28,7 +28,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_5000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -338,10 +338,9 @@ print('Feature-importance table → top20_feature_importance.csv')
 # ────────────────  Baseline single-stage models ────────────────
 baseline_models = {'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
                    'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss'),
-                   'SVM-RBF': (
-                       lambda: __import__('sklearn.svm', fromlist=['SVC']).SVC(probability=True, kernel='rbf', C=2,
-                                                                               gamma='scale',
-                                                                               random_state=RANDOM_STATE))()}
+                   'SVM-RBF': (lambda: __import__('sklearn.svm', fromlist=['SVC'])
+                               .SVC(probability=True, kernel='rbf', C=2,gamma='scale',random_state=RANDOM_STATE))()
+                   }
 
 # ارزیابی یکسان مدل‌ها با تابع مشترک
 results = []
@@ -364,12 +363,6 @@ res_df = pd.DataFrame(results)
 summary = res_df.groupby('Model').agg(['mean', 'std']).reset_index()
 # مرتب‌سازی بر حسب میانگین هزینه
 summary = summary.sort_values(('Cost', 'mean'))
-print('\n—— Baseline mean ± std over 5 folds ——')
-print('\033[94m' + summary.to_string() + '\033[0m')
-
-print('444444444444444444444444444444444444444444444444444444')
-import pandas as pd
-
 # ۱) ستون‌های مورد نظر برای ارزیابی
 prop_cols = ['BAcc', 'GM', 'FM', 'AUC', 'Cost', 'TP', 'TN', 'FP', 'FN']
 
@@ -396,9 +389,10 @@ for model in res_df['Model'].unique():
 final_table = pd.DataFrame(base_rows + [prop_row])
 
 # ۵) مرتب‌سازی و نمایش
+final_table = final_table.sort_values(by='BAcc', ascending=False)
 final_table = final_table[['Method', 'BAcc', 'AUC', 'FM', 'GM', 'Cost', 'TP', 'TN', 'FP', 'FN']]
 print('\n—— 📊 جدول مقایسه‌ای مدل‌ها ——')
-print(final_table.to_string(index=False))
+print('\033[94m' + final_table.to_string(index=False) + '\033[0m')
 
 # ۶) ذخیره فایل نهایی
 final_table.to_csv('comparison_table.csv', index=False)
