@@ -30,7 +30,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_5000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_30000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -191,7 +191,7 @@ for pop, ngen in param_grid:
     print(f'Pop={pop:3}, Gen={ngen:3} → Cost={c:,.0f}, #BND={b}, time={t:.1f}s')
 
 sens_df = pd.DataFrame(sens_rows, columns=['PopSize', 'NGen', 'DecisionCost', 'NumBND', 'Seconds'])
-sens_df.to_csv('nsga_sensitivity.csv', index=False)
+sens_df.to_csv('results/nsga_sensitivity.csv', index=False)
 
 # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
 ResultManager().plot_sensitivity(sens_df)
@@ -278,7 +278,7 @@ for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Cost'], m.T):
 imp_df = (pd.concat(importances).groupby('feature')['importance'].agg(['mean', 'std']).sort_values('mean',
                                                                                                    ascending=False).head(
     TOP_N_FEATS).reset_index())
-imp_df.to_csv('top20_feature_importance.csv', index=False)
+imp_df.to_csv('results/top20_feature_importance.csv', index=False)
 print('Feature-importance table → top20_feature_importance.csv')
 
 # ────────────────  Baseline single-stage models ────────────────
@@ -352,9 +352,9 @@ print('\n—— 📊 جدول مقایسه‌ای مدل‌ها ——')
 print('\033[94m' + final_table.to_string(index=False) + '\033[0m')
 
 # ۶) ذخیره فایل نهایی
-final_table.to_csv('comparison_table.csv', index=False)
+final_table.to_csv('results/comparison_table.csv', index=False)
 print('✅ جدول نهایی ذخیره شد → comparison_table.csv')
 
 # ذخیره خروجی
-res_df.to_csv('baseline_models_metrics.csv', index=False)
+res_df.to_csv('results/baseline_models_metrics.csv', index=False)
 print('Baseline metrics saved → baseline_models_metrics.csv')
