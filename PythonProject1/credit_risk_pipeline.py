@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-credit_risk_pipeline_full.py
-سه‌راهه + NSGA-II + استکینگ با ۵-Fold CV
-حذف ویژگی‌های بسیار همبسته و تحلیل حساسیت پارامترهای NSGA-II
-"""
-
 import os
 import time
 import warnings
@@ -27,6 +20,12 @@ from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.termination import get_termination
 from pymoo.optimize import minimize
+
+pd.set_option('display.max_columns', None)        # نمایش همه ستون‌ها
+pd.set_option('display.expand_frame_repr', False) # جلوگیری از شکستن به چند خط
+pd.set_option('display.width', 200)               # تنظیم عرض کنسول (می‌تونی عدد رو بیشتر هم بذاری)
+pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی دلخواه
+
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
@@ -93,14 +92,15 @@ def preprocess(df):
         df[c].fillna(df[c].mode().iloc[0], inplace=True)
     return pd.get_dummies(df, columns=cat_cols, drop_first=True)
 
+
 def plot_pareto_front(res, fold):
     """ذخیرهٔ شکل جبههٔ پارتو برای فولد مشخص."""
     import matplotlib.pyplot as plt
 
     f1, f2 = res.F[:, 0], res.F[:, 1]
-    plt.figure(figsize=(6,4))
+    plt.figure(figsize=(6, 4))
     plt.scatter(f2, f1, c='steelblue', s=25, alpha=0.8, edgecolor='k')
-    plt.gca().invert_xaxis()           # مثل مقاله: f2 کم‌تر سمت راست ببینیم
+    plt.gca().invert_xaxis()  # مثل مقاله: f2 کم‌تر سمت راست ببینیم
     plt.xlabel('f₂  (Border Width ∑(α-β))')
     plt.ylabel('f₁  (Decision Cost)')
     plt.title(f'Pareto Front – Fold {fold}')
@@ -109,6 +109,20 @@ def plot_pareto_front(res, fold):
     plt.savefig(fname, dpi=300)
     plt.close()
     print(f'💾  Pareto front saved → {fname}')
+
+
+def compute_metrics(y_true, y_pred, prob, lam_np, lam_pn):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+    rec_d = tp / (tp + fn) if tp + fn else 0
+    rec_n = tn / (tn + fp) if tn + fp else 0
+    prec = tp / (tp + fp) if tp + fp else 0
+    bacc = (rec_d + rec_n) / 2
+    fm = 2 * prec * rec_d / (prec + rec_d) if prec + rec_d else 0
+    gm = np.sqrt(rec_d * rec_n)
+    auc = roc_auc_score(y_true, prob)
+    cost = np.where(y_true == 1, np.where(y_pred == 1, 0, lam_np), np.where(y_pred == 0, 0, lam_pn)).sum()
+    return {'BAcc': bacc, 'FM': fm, 'GM': gm, 'AUC': auc, 'Cost': cost}
+
 
 class ThresholdProblem(ElementwiseProblem):
     def __init__(self, y, p, lnp, lpn):
@@ -210,20 +224,13 @@ else:
     # ---------- Figure 1: Decision Cost vs Population Size (Bubble chart) ----------
     fig1, ax1 = plt.subplots(figsize=(7, 5))
     norm = plt.Normalize(sens_df['NGen'].min(), sens_df['NGen'].max())
-    scatter = ax1.scatter(
-        sens_df['PopSize'],
-        sens_df['DecisionCost'],
-        s=sens_df['NumBND']*6,                 # حباب ∝ تعداد BND
-        c=sens_df['NGen'],
-        cmap=cm.viridis, norm=norm,
-        alpha=0.85, edgecolor='k', linewidth=0.6
-    )
+    scatter = ax1.scatter(sens_df['PopSize'], sens_df['DecisionCost'], s=sens_df['NumBND'] * 6,  # حباب ∝ تعداد BND
+        c=sens_df['NGen'], cmap=cm.viridis, norm=norm, alpha=0.85, edgecolor='k', linewidth=0.6)
     ax1.set_xlabel('Population Size', fontsize=11)
     ax1.set_ylabel('Decision Cost (f₁)', fontsize=11)
     ax1.set_title('NSGA-II Sensitivity: Cost vs Population Size', fontsize=12)
     for _, r in sens_df.iterrows():
-        ax1.text(r.PopSize, r.DecisionCost,
-                 f"BND={r.NumBND}", fontsize=8, ha='left', va='bottom')
+        ax1.text(r.PopSize, r.DecisionCost, f"BND={r.NumBND}", fontsize=8, ha='left', va='bottom')
     cbar = fig1.colorbar(scatter, ax=ax1, pad=0.02)
     cbar.set_label('Number of Generations', fontsize=10)
     fig1.tight_layout()
@@ -231,11 +238,9 @@ else:
 
     # ---------- Figure 2: Runtime vs Population Size ----------
     fig2, ax2 = plt.subplots(figsize=(7, 4))
-    ax2.plot(sens_df['PopSize'], sens_df['Seconds'],
-             marker='o', linestyle='-', color='#1f77b4')
+    ax2.plot(sens_df['PopSize'], sens_df['Seconds'], marker='o', linestyle='-', color='#1f77b4')
     for _, r in sens_df.iterrows():
-        ax2.text(r.PopSize, r.Seconds,
-                 f"{r.Seconds:.1f}s", fontsize=8, ha='center', va='bottom')
+        ax2.text(r.PopSize, r.Seconds, f"{r.Seconds:.1f}s", fontsize=8, ha='center', va='bottom')
     ax2.set_xlabel('Population Size', fontsize=11)
     ax2.set_ylabel('Runtime (seconds)', fontsize=11)
     ax2.set_title('NSGA-II Sensitivity: Runtime vs Population Size', fontsize=12)
@@ -304,16 +309,12 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     GM = np.sqrt(rec_d * rec_n)
     AUC = roc_auc_score(y_te, prob_te)
 
-    cost_before = np.where(region == 'POS',
-                           np.where(y_te == 0, lam_PN, 0),
-                           np.where(region == 'NEG',
-                                    np.where(y_te == 1, lam_NP, 0),
+    cost_before = np.where(region == 'POS', np.where(y_te == 0, lam_PN, 0),
+                           np.where(region == 'NEG', np.where(y_te == 1, lam_NP, 0),
                                     np.where(y_te == 1, u_star * lam_NP, v_star * lam_PN)))
     Cost_before = cost_before.sum()
 
-    cost_after = np.where(final_pred == 0,
-                          np.where(y_te == 1, lam_NP, 0),
-                          np.where(y_te == 0, lam_PN, 0))
+    cost_after = np.where(final_pred == 0, np.where(y_te == 1, lam_NP, 0), np.where(y_te == 0, lam_PN, 0))
     Cost_after = cost_after.sum()
 
     metrics.append([BAcc, GM, FM, AUC, Cost_before, Cost_after])
@@ -334,74 +335,37 @@ imp_df = (pd.concat(importances).groupby('feature')['importance'].agg(['mean', '
 imp_df.to_csv('top20_feature_importance.csv', index=False)
 print('Feature-importance table → top20_feature_importance.csv')
 
-
 # ────────────────── Baseline single-stage models ──────────────────
-from sklearn.svm import SVC
-from sklearn.metrics import confusion_matrix
+# ────────────────  Baseline single-stage models ────────────────
+baseline_models = {'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
+    'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss',
+                             use_label_encoder=False), 'SVM-RBF': (
+        lambda: __import__('sklearn.svm', fromlist=['SVC']).SVC(probability=True, kernel='rbf', C=2, gamma='scale',
+                                                                random_state=RANDOM_STATE))()}
 
-baseline_models = {
-    'RandomForest': RandomForestClassifier(n_estimators=300,
-                                           random_state=RANDOM_STATE),
-    'XGBoost'     : XGBClassifier(n_estimators=400, random_state=RANDOM_STATE,
-                                  eval_metric='logloss', use_label_encoder=False),
-    'SVM-RBF'     : SVC(probability=True, kernel='rbf', C=2, gamma='scale',
-                        random_state=RANDOM_STATE)
-}
-
-base_metrics = {name: [] for name in baseline_models}   # هر مدل → ۵ ردیف
-
-print('\n===== Baseline comparison (same 5 folds) =====')
+# ارزیابی یکسان مدل‌ها با تابع مشترک
+results = []
+kf = StratifiedKFold(n_splits=KFoldSize, shuffle=True, random_state=RANDOM_STATE)
 for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     X_tr, X_te = X_full.iloc[tr_idx], X_full.iloc[te_idx]
     y_tr, y_te = y_full.iloc[tr_idx], y_full.iloc[te_idx]
-
-    # λ‌ها برای همان سطرهای تست
-    lam_NP = (raw.loc[X_te.index, LOAN_AMT_COL] +
-              raw.loc[X_te.index, 'interest_cash']).values
-    lam_PN = raw.loc[X_te.index, 'interest_cash'].values
-
+    lam_NP = (raw.loc[te_idx, LOAN_AMT_COL] + raw.loc[te_idx, 'interest_cash']).values
+    lam_PN = raw.loc[te_idx, 'interest_cash'].values
     for name, clf in baseline_models.items():
         clf.fit(X_tr, y_tr)
         prob = clf.predict_proba(X_te)[:, 1]
-        pred = (prob >= 0.5).astype(int)    # آستانهٔ ۵۰٪ کلاسیک
+        pred = (prob >= 0.5).astype(int)
+        m = compute_metrics(y_te, pred, prob, lam_NP, lam_PN)
+        m.update({'Model': name, 'Fold': fold})
+        results.append(m)
 
-        # متریک‌ها
-        tn, fp, fn, tp = confusion_matrix(y_te, pred, labels=[0,1]).ravel()
-        rec_d = tp/(tp+fn) if tp+fn else 0
-        rec_n = tn/(tn+fp) if tn+fp else 0
-        prec  = tp/(tp+fp) if tp+fp else 0
-        BAcc  = (rec_d+rec_n)/2
-        FM    = 2*prec*rec_d/(prec+rec_d) if prec+rec_d else 0
-        GM    = np.sqrt(rec_d*rec_n)
-        AUC   = roc_auc_score(y_te, prob)
-        # هزینه دوکلاسه: فقط λ_NP یا λ_PN
-        Cost  = np.where(y_te==1,
-                         np.where(pred==1,0,lam_NP),
-                         np.where(pred==0,0,lam_PN)).sum()
-
-        base_metrics[name].append([BAcc, GM, FM, AUC, Cost])
-
-    if fold == 1:
-        print('  (fold loop shared با مدل اصلی – baseline نیز اجرا شد)')
-
-# -------- جدول میانگین ± انحراف معیار ----------
-cols = ['BAcc','GM','FM','AUC','Cost']
+# خلاصه میانگین و انحراف معیار
+res_df = pd.DataFrame(results)
+summary = res_df.groupby('Model').agg(['mean', 'std']).reset_index()
+# مرتب‌سازی بر حسب میانگین هزینه
+summary = summary.sort_values(('Cost', 'mean'))
 print('\n—— Baseline mean ± std over 5 folds ——')
-for name, rows in base_metrics.items():
-    arr = np.array(rows)                     # 5×5
-    means, stds = arr.mean(axis=0), arr.std(axis=0)
-    print(f'\n▶ {name}')
-    for c, μ, σ in zip(cols, means, stds):
-        if c=='Cost':
-            print(f'   {c}: {μ:,.0f} ± {σ:,.0f}')
-        else:
-            print(f'   {c}: {μ:.4f} ± {σ:.4f}')
-
-# ---------- ذخیره در CSV برای پایان‌نامه ----------
-flat = []
-for model, rows in base_metrics.items():
-    for i,row in enumerate(rows,1):
-        flat.append([model, i, *row])
-pd.DataFrame(flat, columns=['Model','Fold',*cols]) \
-  .to_csv('baseline_models_metrics.csv', index=False)
-print('\nBaseline metrics saved → baseline_models_metrics.csv')
+print('\033[94m' + summary.to_string() + '\033[0m')
+# ذخیره خروجی
+res_df.to_csv('baseline_models_metrics.csv', index=False)
+print('Baseline metrics saved → baseline_models_metrics.csv')
