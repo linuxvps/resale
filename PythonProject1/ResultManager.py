@@ -92,7 +92,7 @@ class ResultManager:
         plt.figure(figsize=(8, 6))
         colors = plt.cm.viridis(np.linspace(0, 1, len(df_imp)))
         plt.barh(df_imp['feature'], df_imp['importance'], color=colors)
-        plt.title('ویژگی‌های منتخب و میزان اهمیت آنها', fontsize=14)
+        plt.title('feature importance', fontsize=14)
         plt.xlabel('Importance', fontsize=12)
         plt.tight_layout()
         plt.savefig('rfecv_feature_importance.png', dpi=300)
