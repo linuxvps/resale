@@ -97,3 +97,35 @@ class ResultManager:
         plt.tight_layout()
         plt.savefig('rfecv_feature_importance.png', dpi=300)
         plt.show()
+
+    def plot_label_count_before_smote(self, label_counts: pd.Series) -> None:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import pandas as pd
+
+        plt.figure(figsize=(10, 6))
+
+        # Ensure the index is numeric
+        label_counts.index = label_counts.index.astype(int)
+
+        # Convert to DataFrame with English column names
+        label_df = pd.DataFrame({'Label': label_counts.index, 'Frequency': label_counts.values})
+
+        sns.barplot(
+            x='Label',
+            y='Frequency',
+            data=label_df,
+            hue='Label',
+            dodge=False,
+            palette=['#4CAF50', '#FF6F61'],
+            legend=False
+        )
+
+        plt.title('Label Distribution Before SMOTE', fontsize=18)
+        plt.xlabel('Labels (0: Non-Default, 1: Default)', fontsize=14)
+        plt.ylabel('Count', fontsize=14)
+        plt.xticks(ticks=[0, 1], labels=['Non-Default', 'Default'])
+        plt.grid(axis='y', linestyle='--', alpha=0.6)
+        plt.tight_layout()
+        plt.show()
+

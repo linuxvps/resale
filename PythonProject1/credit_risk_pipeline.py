@@ -245,6 +245,8 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     X_te = X_te[selected_feats]
     # ------- تا اینجا -------
 
+    label_counts = y_tr.value_counts()
+    ResultManager().plot_label_count_before_smote(label_counts)
 
     X_bal, y_bal = SMOTE(k_neighbors=SMOTE_K, random_state=RANDOM_STATE).fit_resample(X_tr, y_tr)
     lgb_clf = lgb.LGBMClassifier(**LGB_PARAMS).fit(X_bal, y_bal)
