@@ -235,7 +235,10 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     print(f"{PINK}Fold {fold} – RFECV تعداد ویژگی‌های منتخب: {rfecv.n_features_} → {selected_feats.tolist()}{RESET}")
 
     cv_scores = rfecv.cv_results_['mean_test_score']
-    ResultManager().plot_rfecv(cv_scores)
+
+    feature_names = X_tr.columns.tolist()
+    ResultManager().plot_rfecv_feature_importance(rfecv, feature_names)
+
     print(f"{PINK}Fold {fold} – امتیازهای CV بر حسب تعداد ویژگی: {cv_scores}{RESET}")
 
     X_tr = X_tr[selected_feats]

@@ -2,6 +2,8 @@
 import os
 
 import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 from matplotlib import cm
 
 
@@ -66,15 +68,32 @@ class ResultManager:
 
         print(f'📊 Sensitivity plots saved → {path1} / {path2}')
 
-    def plot_rfecv(self , cv_scores):
-        feature_counts = range(1, len(cv_scores) + 1)
 
-        plt.figure(figsize=(8, 5))
-        plt.plot(feature_counts, cv_scores, marker='o', linestyle='-')
-        plt.title("RFECV نتایج انتخاب ویژگی")
-        plt.xlabel("تعداد ویژگی‌های منتخب")
-        plt.ylabel("امتیاز CV (ROC AUC)")
-        plt.grid(True)
+    def plot_rfecv_feature_importance(self,rfecv, feature_names, top_n=20):
+        """
+        رسم نمودار افقی اهمیت ویژگی‌ها پس از اجرای RFECV
+        rfecv: شیء آموزش‌دیده RFECV
+        feature_names: نام تمام ویژگی‌های اولیه (لیستی یا آرایه‌ای)
+        top_n: تعداد ویژگی‌های برتر برای نمایش
+        """
+        # دریافت نام و اهمیت ویژگی‌های انتخاب‌شده
+        selected_mask = rfecv.support_
+        selected_feats = np.array(feature_names)[selected_mask]
+        importances = rfecv.estimator_.feature_importances_
+
+        # ساخت DataFrame و مرتب‌سازی
+        df_imp = pd.DataFrame({
+            'feature': selected_feats,
+            'importance': importances
+        })
+        df_imp = df_imp.sort_values('importance', ascending=True).tail(top_n)
+
+        # رسم نمودار افقی
+        plt.figure(figsize=(8, 6))
+        colors = plt.cm.viridis(np.linspace(0, 1, len(df_imp)))
+        plt.barh(df_imp['feature'], df_imp['importance'], color=colors)
+        plt.title('ویژگی‌های منتخب و میزان اهمیت آنها', fontsize=14)
+        plt.xlabel('Importance', fontsize=12)
         plt.tight_layout()
-        plt.savefig("rfecv_plot.png", dpi=300)  # ذخیره به عنوان تصویر
+        plt.savefig('rfecv_feature_importance.png', dpi=300)
         plt.show()
