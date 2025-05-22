@@ -30,7 +30,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_30000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -140,6 +140,11 @@ def pick_solution(res, y, p, lnp, lpn):
 print('Reading data …')
 raw = pd.read_excel(DATA_FILE).dropna(axis=1, how='all')
 raw['label'] = raw[TARGET_COL].apply(status_to_label)
+
+raw['LOAN_AMOUNT'] = pd.to_numeric(raw['LOAN_AMOUNT'], errors='coerce')
+raw['INSTALLMENT_NUMBER'] = pd.to_numeric(raw['INSTALLMENT_NUMBER'], errors='coerce')
+raw = raw[(raw['LOAN_AMOUNT'] >= 0) & (raw['INSTALLMENT_NUMBER'] >= 0)].reset_index(drop=True)
+
 raw[LOAN_AMT_COL] = pd.to_numeric(raw[LOAN_AMT_COL], errors='coerce').fillna(raw[LOAN_AMT_COL].mean())
 raw[INTEREST_RATE_COL] = pd.to_numeric(raw[INTEREST_RATE_COL], errors='coerce').fillna(raw[INTEREST_RATE_COL].mean())
 years = pd.to_numeric(raw.get(DURATION_Y_COL, 1), errors='coerce').fillna(1)
@@ -276,9 +281,13 @@ print('\n—— 5-Fold Mean ± Std ——')
 for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Cost'], m.T):
     print(f'{name}: {col.mean():.4f} ± {col.std():.4f}')
 
-imp_df = (pd.concat(importances).groupby('feature')['importance'].agg(['mean', 'std']).sort_values('mean',
-                                                                                                   ascending=False).head(
-    TOP_N_FEATS).reset_index())
+imp_df = (pd.concat(importances)
+          .groupby('feature')['importance']
+          .agg(['mean', 'std'])
+          .sort_values('mean',ascending=False)
+          .head(TOP_N_FEATS)
+          .reset_index())
+
 imp_df.to_csv('results/top20_feature_importance.csv', index=False)
 print('Feature-importance table → top20_feature_importance.csv')
 
