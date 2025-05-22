@@ -206,11 +206,11 @@ ResultManager().plot_sensitivity(sens_df)
 # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
 
 # ────────────────  تعریف استکینگ مشترک ────────────────
-base = [('rf', RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
-        ('xgb', XGBClassifier(n_estimators=300, random_state=RANDOM_STATE, eval_metric='logloss')),
+base = [('rf'  ,   RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
+        ('xgb' ,  XGBClassifier(n_estimators=300, random_state=RANDOM_STATE, eval_metric='logloss')),
         ('gbdt', GradientBoostingClassifier(random_state=RANDOM_STATE)),
-        ('ert', ExtraTreesClassifier(n_estimators=200, random_state=RANDOM_STATE)),
-        ('ada', AdaBoostClassifier(algorithm='SAMME', random_state=RANDOM_STATE))]
+        ('ert' ,  ExtraTreesClassifier(n_estimators=200, random_state=RANDOM_STATE)),
+        ('ada' ,  AdaBoostClassifier(algorithm='SAMME', random_state=RANDOM_STATE))]
 
 stack_clf = StackingClassifier(estimators=base, final_estimator=LogisticRegression(max_iter=1000),
                                cv=KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE), n_jobs=2)
