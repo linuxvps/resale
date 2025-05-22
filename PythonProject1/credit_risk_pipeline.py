@@ -206,7 +206,7 @@ ResultManager().plot_sensitivity(sens_df)
 # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
 
 # ────────────────  تعریف استکینگ مشترک ────────────────
-base = [('rf'  ,   RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
+base = [('rf'  ,  RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
         ('xgb' ,  XGBClassifier(n_estimators=300, random_state=RANDOM_STATE, eval_metric='logloss')),
         ('gbdt',  GradientBoostingClassifier(random_state=RANDOM_STATE)),
         ('ert' ,  ExtraTreesClassifier(n_estimators=200, random_state=RANDOM_STATE)),
