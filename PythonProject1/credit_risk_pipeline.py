@@ -171,6 +171,7 @@ def nsga_sensitivity(pop, ngen, y, p, lnp, lpn):
     return cost, n_bnd, time.time() - t0
 
 
+
 print('\nRunning NSGA-II sensitivity study …')
 # یک فولد تصادفی برای تحلیل
 fold1_tr, fold1_te = next(StratifiedKFold(n_splits=KFoldSize, shuffle=True, random_state=RANDOM_STATE).split(X_full, y_full))
