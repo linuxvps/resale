@@ -65,3 +65,16 @@ class ResultManager:
         fig2.savefig(path2, dpi=300)
 
         print(f'📊 Sensitivity plots saved → {path1} / {path2}')
+
+    def plot_rfecv(self , cv_scores):
+        feature_counts = range(1, len(cv_scores) + 1)
+
+        plt.figure(figsize=(8, 5))
+        plt.plot(feature_counts, cv_scores, marker='o', linestyle='-')
+        plt.title("RFECV نتایج انتخاب ویژگی")
+        plt.xlabel("تعداد ویژگی‌های منتخب")
+        plt.ylabel("امتیاز CV (ROC AUC)")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("rfecv_plot.png", dpi=300)  # ذخیره به عنوان تصویر
+        plt.show()

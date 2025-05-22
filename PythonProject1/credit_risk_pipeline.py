@@ -15,6 +15,8 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier,
                               ExtraTreesClassifier, StackingClassifier)
+from sklearn.feature_selection import RFECV
+
 import lightgbm as lgb
 from xgboost import XGBClassifier
 
@@ -30,7 +32,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_5000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -221,6 +223,25 @@ print('\n===== 5-Fold Cross-Validation =====')
 for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     X_tr, X_te = X_full.iloc[tr_idx], X_full.iloc[te_idx]
     y_tr, y_te = y_full.iloc[tr_idx], y_full.iloc[te_idx]
+
+    # ------- اضافه کردن RFECV -------
+    estimator = lgb.LGBMClassifier(**LGB_PARAMS)
+    rfecv = RFECV(estimator=estimator, step=1, cv=5, scoring='roc_auc', min_features_to_select=1)
+    rfecv.fit(X_tr, y_tr)
+    selected_feats = X_tr.columns[rfecv.support_]
+
+    PINK = "\033[95m"
+    RESET = "\033[0m"
+    print(f"{PINK}Fold {fold} – RFECV تعداد ویژگی‌های منتخب: {rfecv.n_features_} → {selected_feats.tolist()}{RESET}")
+
+    cv_scores = rfecv.cv_results_['mean_test_score']
+    ResultManager().plot_rfecv(cv_scores)
+    print(f"{PINK}Fold {fold} – امتیازهای CV بر حسب تعداد ویژگی: {cv_scores}{RESET}")
+
+    X_tr = X_tr[selected_feats]
+    X_te = X_te[selected_feats]
+    # ------- تا اینجا -------
+
 
     X_bal, y_bal = SMOTE(k_neighbors=SMOTE_K, random_state=RANDOM_STATE).fit_resample(X_tr, y_tr)
     lgb_clf = lgb.LGBMClassifier(**LGB_PARAMS).fit(X_bal, y_bal)
