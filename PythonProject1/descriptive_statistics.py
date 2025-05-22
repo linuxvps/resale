@@ -15,7 +15,7 @@ import pandas as pd
 
 def main():
     # مسیر هاردکد فایل اکسل
-    data_path = Path(r'C:\Users\nima\data\Saeed_un.xlsx')
+    data_path = Path(r'C:\Users\nima\data\Saeed_un - Copy.xlsx')
     if not data_path.exists():
         print(f"ERROR: File not found: {data_path}")
         sys.exit(1)
@@ -47,7 +47,7 @@ def main():
     # ۳) مرتب‌سازی ستون‌ها
     cols = ['Mean','StdDev','CV','Median','Min','Max','Range','IQR',
             'Skew','Kurt','Missing%','Unique']
-    cols = ['Mean','StdDev','CV','Median','IQR','Missing%','Unique']
+    cols = ['Mean','StdDev','CV','Median','Missing%','Unique']
     stats = stats[cols]
 
     # ۴) گرد کردن همهٔ مقادیر تا ۲ رقم اعشار
