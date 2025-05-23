@@ -321,7 +321,7 @@ print('Feature-importance table → top20_feature_importance.csv')
 baseline_models = {'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
                    'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss'),
                    'SVM-RBF': (lambda: __import__('sklearn.svm', fromlist=['SVC'])
-                               .SVC(probability=True, kernel='rbf', C=2,gamma='scale',random_state=RANDOM_STATE))()
+                               .SVC(probability=True, kernel='rbf', C=2, gamma='scale', random_state=RANDOM_STATE))()
                    }
 
 # ارزیابی یکسان مدل‌ها با تابع مشترک
