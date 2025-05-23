@@ -251,7 +251,9 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     X_bal, y_bal = SMOTE(k_neighbors=SMOTE_K, random_state=RANDOM_STATE).fit_resample(X_tr, y_tr)
     lgb_clf = lgb.LGBMClassifier(**LGB_PARAMS).fit(X_bal, y_bal)
     prob_te = lgb_clf.predict_proba(X_te)[:, 1]
-
+    # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
+    ResultManager().plot_prob_distribution(y_te.values, prob_te, fold)
+    # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
     importances.append(
         pd.DataFrame({'feature': X_bal.columns, 'importance': lgb_clf.feature_importances_, 'fold': fold}))
 

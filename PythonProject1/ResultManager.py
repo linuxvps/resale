@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from matplotlib import cm
+import seaborn as sns
 
 
 class ResultManager:
@@ -129,3 +130,25 @@ class ResultManager:
         plt.tight_layout()
         plt.show()
 
+    def plot_prob_distribution(self, y_true, proba, fold):
+
+        # Create DataFrame for easy plotting
+        df = pd.DataFrame({'Default Probability': proba, 'True Label': y_true})
+        plt.figure(figsize=(8, 5))
+
+        # Density plot for Non-Default class
+        sns.histplot(df[df['True Label'] == 0]['Default Probability'],
+                     color='#4CAF50', label='Non-Default', kde=True, stat='density', bins=20, alpha=0.6)
+
+        # Density plot for Default class
+        sns.histplot(df[df['True Label'] == 1]['Default Probability'],
+                     color='#FF6F61', label='Default', kde=True, stat='density', bins=20, alpha=0.6)
+
+        plt.title(f'Default Probability Distribution – Fold {fold}', fontsize=14)
+        plt.xlabel('Predicted Default Probability', fontsize=12)
+        plt.ylabel('Density', fontsize=12)
+        plt.legend(title='Class', fontsize=11)
+        plt.grid(axis='y', linestyle='--', alpha=0.5)
+        plt.tight_layout()
+        plt.savefig(f'prob_dist_fold_{fold}.png', dpi=300)  # Save figure
+        plt.show()
