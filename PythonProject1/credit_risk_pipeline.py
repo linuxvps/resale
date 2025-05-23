@@ -123,8 +123,8 @@ class ThresholdProblem(ElementwiseProblem):
         cost = np.where(dec == 0, np.where(self.y == 1, self.lnp, 0),
                         np.where(dec == 1, np.where(self.y == 0, self.lpn, 0),
                                  np.where(self.y == 1, u * self.lnp, v * self.lpn)))
-        out['F'] = [cost.sum(), np.sum(a - b)]
-        out['G'] = [g]
+        out['F'] = [cost.sum(), np.sum(a - b)] # هر دو تابع هدف
+        out['G'] = [g] # محدودیت
 
 
 def pick_solution(res, y, p, lnp, lpn):
@@ -259,7 +259,7 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
 
     lam_NP = (raw.loc[X_te.index, LOAN_AMT_COL] + raw.loc[X_te.index, 'interest_cash']).values
     lam_PN = raw.loc[X_te.index, 'interest_cash'].values
-
+    # NSGA 2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
     res = minimize(ThresholdProblem(y_te.values, prob_te, lam_NP, lam_PN),
                    NSGA2(pop_size=NSGA_POP, eliminate_duplicates=True), get_termination('n_gen', NSGA_GEN),
                    seed=RANDOM_STATE, verbose=False)
