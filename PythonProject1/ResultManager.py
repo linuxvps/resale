@@ -152,3 +152,46 @@ class ResultManager:
         plt.tight_layout()
         plt.savefig(f'prob_dist_fold_{fold}.png', dpi=300)  # Save figure
         plt.show()
+
+    def build_and_save_loss_matrix(self,lam_np, lam_pn, u, v,
+                                   sample_idx, fold,
+                                   output_dir='results'):
+        """
+        ماتریس زیان نمونه‌ی مشخص را می‌سازد و در فایل CSV ذخیره می‌کند.
+
+        پارامترها:
+          lam_np      λ_NP برای آن نمونه
+          lam_pn      λ_PN برای آن نمونه
+          u, v        پارامترهای بهینه‌شده‌ی تصمیم تأخیری
+          sample_idx  اندیس (index) نمونه در X_te
+          fold        شماره‌ی فولد
+          output_dir  پوشه‌ای که فایل در آن ذخیره می‌شود
+        """
+        # اطمینان از وجود پوشه
+        os.makedirs(output_dir, exist_ok=True)
+
+        # تعریف اقدامات و ستون‌ها
+        actions = ['پذیرش', 'تصمیم تأخیری', 'رد']
+        cols = ['نکول', 'عدم نکول']
+        mat = pd.DataFrame(index=actions, columns=cols, dtype=float)
+
+        # پرکردن مقادیر ماتریس طبق جدول ۲
+        mat.loc['پذیرش', 'نکول'] = 0
+        mat.loc['پذیرش', 'عدم نکول'] = lam_pn
+        mat.loc['رد', 'نکول'] = lam_np
+        mat.loc['رد', 'عدم نکول'] = 0
+        mat.loc['تصمیم تأخیری', 'نکول'] = u * lam_np
+        mat.loc['تصمیم تأخیری', 'عدم نکول'] = v * lam_pn
+
+        # آماده‌سازی برای ذخیره‌سازی
+        mat_to_save = mat.reset_index().rename(columns={'index': 'اقدام'})
+        mat_to_save.insert(0, 'نمونه', sample_idx)
+        filename = f'loss_matrix_fold_{fold}_sample_{sample_idx}.csv'
+        filepath = os.path.join(output_dir, filename)
+
+        # ذخیره در CSV
+        mat_to_save.to_csv(filepath, index=False, encoding='utf-8-sig')
+        print(f'✅ ماتریس زیان نمونه {sample_idx} در فولد {fold} ذخیره شد: {filepath}')
+
+        return mat
+

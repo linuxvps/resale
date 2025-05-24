@@ -267,6 +267,24 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
 
     u_star, v_star = pick_solution(res, y_te.values, prob_te, lam_NP, lam_PN)
 
+    # ───────── نمایش چند ماتریس زیان نمونه ─────────
+    print(f"\n— ماتریس زیان سه نمونه اول (Fold {fold}) —")
+    for i in range(min(3, len(X_te))):
+        idx = X_te.index[i]
+        mat = ResultManager().build_and_save_loss_matrix(
+        lam_NP[i], lam_PN[i],
+        u_star, v_star,
+        sample_idx=idx,
+        fold=fold,
+        output_dir='results\\loss-matrix'
+    )
+
+        print(f"\nنمونه {idx}:")
+        print(mat)
+    # ───────────────────────────────────────────────────
+
+
+
     alpha = (lam_PN - v_star * lam_PN) / (u_star * lam_NP - v_star * lam_PN + lam_PN)
     beta = (v_star * lam_PN) / (v_star * lam_PN + lam_NP - u_star * lam_NP)
 
