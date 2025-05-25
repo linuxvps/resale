@@ -283,8 +283,6 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
         print(mat)
     # ───────────────────────────────────────────────────
 
-
-
     alpha = (lam_PN - v_star * lam_PN) / (u_star * lam_NP - v_star * lam_PN + lam_PN)
     beta = (v_star * lam_PN) / (v_star * lam_PN + lam_NP - u_star * lam_NP)
 
