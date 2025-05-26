@@ -33,7 +33,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_5000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -49,7 +49,7 @@ SMOTE_K = 5
 
 # LightGBM
 LGB_PARAMS = dict(objective='binary', metric='None', n_estimators=300, learning_rate=0.05, max_depth=-1,
-                  random_state=RANDOM_STATE)
+                  random_state=RANDOM_STATE, verbosity=-1, verbose=-1)
 
 # NSGA-II
 NSGA_POP, NSGA_GEN, EPS = 100, 200, 1e-6
@@ -108,7 +108,7 @@ def compute_metrics(y_true, y_pred, prob, lam_np, lam_pn):
     auc = roc_auc_score(y_true, prob)
     cost = np.where(y_true == 1, np.where(y_pred == 1, 0, lam_np), np.where(y_pred == 0, 0, lam_pn)).sum()
 
-    return {'BAcc': bacc, 'FM': fm, 'GM': gm, 'AUC': auc, 'Cost': cost, 'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn}
+    return {'BAcc': bacc, 'FM': fm, 'GM': gm, 'AUC': auc, 'Precision':prec,'Cost': cost, 'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn}
 
 
 class ThresholdProblem(ElementwiseProblem):
@@ -281,8 +281,8 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
         output_dir='results\\loss-matrix'
     )
 
-        print(f"\nنمونه {idx}:")
-        print(mat)
+        # print(f"\nنمونه {idx}:")
+        # print(mat)
     # ───────────────────────────────────────────────────
 
     alpha = (lam_PN - v_star * lam_PN) / (u_star * lam_NP - v_star * lam_PN + lam_PN)
@@ -326,17 +326,24 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     cost_after = np.where(final_pred == 0, np.where(y_te == 1, lam_NP, 0), np.where(y_te == 0, lam_PN, 0))
     Cost_after = cost_after.sum()
 
-    metrics.append([BAcc, GM, FM, AUC, Cost_after, tp, tn, fp, fn])
+    metrics.append([BAcc, GM, FM, AUC,prec,rec_d, Cost_after, tp, tn, fp, fn])
 
-    print(f'\033[92mFold {fold}:  BAcc={BAcc:.4f}  GM={GM:.4f}  '
-          f'FM={FM:.4f}  AUC={AUC:.4f}  '
-          f'Cost_before={Cost_before:,.0f}  Cost_after={Cost_after:,.0f}\033[0m')
+    print(f'\033[92mFold {fold}:  '
+          f'BAcc={BAcc:.4f}  '
+          f'GM={GM:.4f}  '
+          f'FM={FM:.4f}  '
+          f'AUC={AUC:.4f}  '
+          f'Precision={prec:.4f}  '
+          f'Recall={rec_d:.4f}  '
+          f'Cost_before={Cost_before:,.0f}  '
+          f'Cost_after={Cost_after:,.0f}\033[0m')
 
 # ────────────────  خروجی نهایی جدول‌ها ────────────────
 m = np.array(metrics)
 print('\n—— 5-Fold Mean ± Std ——')
-for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Cost'], m.T):
+for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost'], m[:, :7].T):
     print(f'{name}: {col.mean():.4f} ± {col.std():.4f}')
+
 
 imp_df = (pd.concat(importances)
           .groupby('feature')['importance']
@@ -385,7 +392,7 @@ summary = res_df.groupby('Model').agg(['mean', 'std']).reset_index()
 # مرتب‌سازی بر حسب میانگین هزینه
 summary = summary.sort_values(('Cost', 'mean'))
 # ۱) ستون‌های مورد نظر برای ارزیابی
-prop_cols = ['BAcc', 'GM', 'FM', 'AUC', 'Cost', 'TP', 'TN', 'FP', 'FN']
+prop_cols = ['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost', 'TP', 'TN', 'FP', 'FN']
 
 # ۲) ساخت خلاصهٔ مدل پیشنهادی فقط با میانگین
 prop_df = pd.DataFrame(metrics, columns=prop_cols)
