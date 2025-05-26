@@ -349,11 +349,19 @@ imp_df.to_csv('results/top20_feature_importance.csv', index=False)
 print('Feature-importance table → top20_feature_importance.csv')
 
 # ────────────────  Baseline single-stage models ────────────────
-baseline_models = {'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
-                   'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss'),
-                   'SVM-RBF': (lambda: __import__('sklearn.svm', fromlist=['SVC'])
-                               .SVC(probability=True, kernel='rbf', C=2, gamma='scale', random_state=RANDOM_STATE))()
-                   }
+baseline_models = {
+    'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
+    'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss'),
+    'SVM-RBF': (lambda: __import__('sklearn.svm', fromlist=['SVC'])
+                .SVC(probability=True, kernel='rbf', C=2, gamma='scale', random_state=RANDOM_STATE))(),
+    'Bagging': BaggingClassifier(
+        estimator=DecisionTreeClassifier(random_state=RANDOM_STATE),
+        n_estimators=10,
+        random_state=RANDOM_STATE,
+        n_jobs=-1
+    ),
+    'Stacking': stack_clf
+}
 
 # ارزیابی یکسان مدل‌ها با تابع مشترک
 results = []
