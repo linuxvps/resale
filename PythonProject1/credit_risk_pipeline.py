@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from sklearn.tree import DecisionTreeClassifier
 
 from ResultManager import ResultManager
 
@@ -14,7 +15,7 @@ from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier,
-                              ExtraTreesClassifier, StackingClassifier)
+                              ExtraTreesClassifier, StackingClassifier, BaggingClassifier)
 from sklearn.feature_selection import RFECV
 
 import lightgbm as lgb
@@ -32,7 +33,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_30000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_5000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
@@ -61,6 +62,7 @@ TOP_N_FEATS = 20
 param_grid = [(50, 100), (80, 120), (100, 200), (150, 300)]
 KFoldSize = 5
 
+ENSEMBLE_METHOD = 'bagging'  # گزینه‌ها: 'stacking' یا 'bagging'
 
 
 # ────────────────  توابع کمکی  ────────────────
@@ -288,13 +290,24 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
 
     region = np.where(prob_te >= alpha, 'POS', np.where(prob_te <= beta, 'NEG', 'BND'))
 
-    stack_clf.fit(X_tr, y_tr)
+    # آماده‌سازی مدل تجمیعی برای نمونه‌های مرزی
+    if ENSEMBLE_METHOD == 'bagging':
+        boundary_clf = BaggingClassifier(
+            estimator=DecisionTreeClassifier(random_state=RANDOM_STATE),
+            n_estimators=10,
+            random_state=RANDOM_STATE,
+            n_jobs=-1
+        )
+    else:  # 'stacking'
+        boundary_clf = stack_clf
+
+    boundary_clf.fit(X_tr, y_tr)
     final_pred = np.empty_like(y_te.values)
     final_pred[region == 'POS'] = 1
     final_pred[region == 'NEG'] = 0
     bnd_idx = np.where(region == 'BND')[0]
     if bnd_idx.size:
-        final_pred[bnd_idx] = stack_clf.predict(X_te.iloc[bnd_idx])
+        final_pred[bnd_idx] = boundary_clf.predict(X_te.iloc[bnd_idx])
 
     tn, fp, fn, tp = confusion_matrix(y_te, final_pred, labels=[0, 1]).ravel()
     rec_d = tp / (tp + fn) if tp + fn else 0
