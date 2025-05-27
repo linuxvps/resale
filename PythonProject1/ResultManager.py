@@ -20,13 +20,25 @@ class ResultManager:
         return folder_path
 
     def save_csv(self, df, filename):
-        """ذخیرهٔ DataFrame به صورت CSV"""
         path = os.path.join(self._get_subfolder_path('csv'), filename)
         df.to_csv(path, index=False)
-        print(f'Ὃe CSV saved → {path}')
+        print(f'💾 CSV saved → {path}')
+
+    def save_fold_summary(self, metrics, filename='fold_summary.csv'):
+        m = np.array(metrics)
+        rows = []
+        for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost'], m[:, :7].T):
+            rows.append({
+                'Metric': name,
+                'Mean': round(col.mean(), 4),
+                'Std': round(col.std(), 4)
+            })
+        df = pd.DataFrame(rows)
+        path = os.path.join(self._get_subfolder_path('summary'), filename)
+        df.to_csv(path, index=False)
+        print(f'📄 Fold summary saved → {path}')
 
     def save_pareto_plot(self, res, fold):
-        """ذخیرهٔ نمودار جبههٔ پارتو"""
         f1, f2 = res.F[:, 0], res.F[:, 1]
         plt.figure(figsize=(6, 4))
         plt.scatter(f2, f1, c='steelblue', s=25, alpha=0.8, edgecolor='k')
@@ -41,7 +53,6 @@ class ResultManager:
         print(f'📈 Pareto front saved → {fname}')
 
     def plot_sensitivity(self, sens_df):
-        """ذخیرهٔ نمودارهای تحلیل حساسیت"""
         fig1, ax1 = plt.subplots(figsize=(7, 5))
         norm = plt.Normalize(sens_df['NGen'].min(), sens_df['NGen'].max())
         scatter = ax1.scatter(sens_df['PopSize'], sens_df['DecisionCost'],
@@ -93,10 +104,6 @@ class ResultManager:
         plt.show()
 
     def plot_label_count_before_smote(self, label_counts: pd.Series) -> None:
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import pandas as pd
-
         plt.figure(figsize=(10, 6))
         label_counts.index = label_counts.index.astype(int)
         label_df = pd.DataFrame({'Label': label_counts.index, 'Frequency': label_counts.values})
