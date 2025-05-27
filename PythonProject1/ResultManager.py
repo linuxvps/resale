@@ -31,8 +31,13 @@ class ResultManager:
         print(f'💾 CSV saved → {path}')
 
     def save_comparison_table(self, final_table, filename='comparison_table.csv'):
-        """ذخیره جدول مقایسه‌ای مدل‌ها در پوشه‌ی مشخص comparison"""
+        """ذخیره جدول مقایسه‌ای مدل‌ها در پوشه‌ی مشخص comparison با نمایش دو رقم اعشار"""
         path = os.path.join(self._get_subfolder_path('comparison'), filename)
+
+        # فرمت کردن تمام ستون‌های float به دو رقم اعشار
+        for col in final_table.select_dtypes(include='float'):
+            final_table[col] = final_table[col].apply(lambda x: f"{x:.2f}")
+
         final_table.to_csv(path, index=False)
         print(f'📊 جدول مقایسه‌ای مدل‌ها ذخیره شد → {path}')
 
