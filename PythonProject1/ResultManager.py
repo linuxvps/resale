@@ -7,17 +7,23 @@ import numpy as np
 from matplotlib import cm
 import seaborn as sns
 
+BASE_SAVE_PATH = r'C:\Users\nima\Desktop\payanName\resale\PythonProject1\results'
 
 class ResultManager:
     def __init__(self, output_dir='results'):
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+        self.output_dir = output_dir if output_dir else BASE_SAVE_PATH
+        os.makedirs(self.output_dir, exist_ok=True)
+
+    def _get_subfolder_path(self, subfolder):
+        folder_path = os.path.join(self.output_dir, subfolder)
+        os.makedirs(folder_path, exist_ok=True)
+        return folder_path
 
     def save_csv(self, df, filename):
         """ذخیرهٔ DataFrame به صورت CSV"""
-        path = os.path.join(self.output_dir, filename)
+        path = os.path.join(self._get_subfolder_path('csv'), filename)
         df.to_csv(path, index=False)
-        print(f'💾 CSV saved → {path}')
+        print(f'Ὃe CSV saved → {path}')
 
     def save_pareto_plot(self, res, fold):
         """ذخیرهٔ نمودار جبههٔ پارتو"""
@@ -29,14 +35,13 @@ class ResultManager:
         plt.ylabel('f₁  (Decision Cost)')
         plt.title(f'Pareto Front – Fold {fold}')
         plt.tight_layout()
-        fname = os.path.join(self.output_dir, f'pareto_fold{fold}.png')
+        fname = os.path.join(self._get_subfolder_path('pareto'), f'pareto_fold{fold}.png')
         plt.savefig(fname, dpi=300)
         plt.close()
         print(f'📈 Pareto front saved → {fname}')
 
     def plot_sensitivity(self, sens_df):
         """ذخیرهٔ نمودارهای تحلیل حساسیت"""
-        # نمودار هزینه تصمیم
         fig1, ax1 = plt.subplots(figsize=(7, 5))
         norm = plt.Normalize(sens_df['NGen'].min(), sens_df['NGen'].max())
         scatter = ax1.scatter(sens_df['PopSize'], sens_df['DecisionCost'],
@@ -51,52 +56,40 @@ class ResultManager:
         cbar = fig1.colorbar(scatter, ax=ax1)
         cbar.set_label('Number of Generations')
         fig1.tight_layout()
-        path1 = os.path.join(self.output_dir, 'nsga_sensitivity_cost.png')
+        path1 = os.path.join(self._get_subfolder_path('sensitivity'), 'nsga_sensitivity_cost.png')
         fig1.savefig(path1, dpi=300)
 
-        # نمودار زمان اجرا
         fig2, ax2 = plt.subplots(figsize=(7, 4))
-        ax2.plot(sens_df['PopSize'], sens_df['Seconds'],
-                 marker='o', linestyle='-', color='#1f77b4')
+        ax2.plot(sens_df['PopSize'], sens_df['Seconds'], marker='o', linestyle='-', color='#1f77b4')
         for _, r in sens_df.iterrows():
             ax2.text(r.PopSize, r.Seconds, f"{r.Seconds:.1f}s", fontsize=8)
         ax2.set_xlabel('Population Size')
         ax2.set_ylabel('Runtime (seconds)')
         ax2.set_title('NSGA-II Sensitivity: Runtime vs Population Size')
-        path2 = os.path.join(self.output_dir, 'nsga_sensitivity_runtime.png')
+        path2 = os.path.join(self._get_subfolder_path('sensitivity'), 'nsga_sensitivity_runtime.png')
         fig2.tight_layout()
         fig2.savefig(path2, dpi=300)
 
         print(f'📊 Sensitivity plots saved → {path1} / {path2}')
 
-
     def plot_rfecv_feature_importance(self,rfecv, feature_names, top_n=20):
-        """
-        رسم نمودار افقی اهمیت ویژگی‌ها پس از اجرای RFECV
-        rfecv: شیء آموزش‌دیده RFECV
-        feature_names: نام تمام ویژگی‌های اولیه (لیستی یا آرایه‌ای)
-        top_n: تعداد ویژگی‌های برتر برای نمایش
-        """
-        # دریافت نام و اهمیت ویژگی‌های انتخاب‌شده
         selected_mask = rfecv.support_
         selected_feats = np.array(feature_names)[selected_mask]
         importances = rfecv.estimator_.feature_importances_
 
-        # ساخت DataFrame و مرتب‌سازی
         df_imp = pd.DataFrame({
             'feature': selected_feats,
             'importance': importances
         })
         df_imp = df_imp.sort_values('importance', ascending=True).tail(top_n)
 
-        # رسم نمودار افقی
         plt.figure(figsize=(8, 6))
         colors = plt.cm.viridis(np.linspace(0, 1, len(df_imp)))
         plt.barh(df_imp['feature'], df_imp['importance'], color=colors)
         plt.title('feature importance', fontsize=14)
         plt.xlabel('Importance', fontsize=12)
         plt.tight_layout()
-        plt.savefig('rfecv_feature_importance.png', dpi=300)
+        plt.savefig(os.path.join(self._get_subfolder_path('importance'), 'rfecv_feature_importance.png'), dpi=300)
         plt.show()
 
     def plot_label_count_before_smote(self, label_counts: pd.Series) -> None:
@@ -105,11 +98,7 @@ class ResultManager:
         import pandas as pd
 
         plt.figure(figsize=(10, 6))
-
-        # Ensure the index is numeric
         label_counts.index = label_counts.index.astype(int)
-
-        # Convert to DataFrame with English column names
         label_df = pd.DataFrame({'Label': label_counts.index, 'Frequency': label_counts.values})
 
         sns.barplot(
@@ -131,16 +120,12 @@ class ResultManager:
         plt.show()
 
     def plot_prob_distribution(self, y_true, proba, fold):
-
-        # Create DataFrame for easy plotting
         df = pd.DataFrame({'Default Probability': proba, 'True Label': y_true})
         plt.figure(figsize=(8, 5))
 
-        # Density plot for Non-Default class
         sns.histplot(df[df['True Label'] == 0]['Default Probability'],
                      color='#4CAF50', label='Non-Default', kde=True, stat='density', bins=20, alpha=0.6)
 
-        # Density plot for Default class
         sns.histplot(df[df['True Label'] == 1]['Default Probability'],
                      color='#FF6F61', label='Default', kde=True, stat='density', bins=20, alpha=0.6)
 
@@ -150,32 +135,19 @@ class ResultManager:
         plt.legend(title='Class', fontsize=11)
         plt.grid(axis='y', linestyle='--', alpha=0.5)
         plt.tight_layout()
-        plt.savefig(f'prob_dist_fold_{fold}.png', dpi=300)  # Save figure
+        plt.savefig(os.path.join(self._get_subfolder_path('distribution'), f'prob_dist_fold_{fold}.png'), dpi=300)
         plt.show()
 
     def build_and_save_loss_matrix(self,lam_np, lam_pn, u, v,
                                    sample_idx, fold,
                                    output_dir='results'):
-        """
-        ماتریس زیان نمونه‌ی مشخص را می‌سازد و در فایل CSV ذخیره می‌کند.
-
-        پارامترها:
-          lam_np      λ_NP برای آن نمونه
-          lam_pn      λ_PN برای آن نمونه
-          u, v        پارامترهای بهینه‌شده‌ی تصمیم تأخیری
-          sample_idx  اندیس (index) نمونه در X_te
-          fold        شماره‌ی فولد
-          output_dir  پوشه‌ای که فایل در آن ذخیره می‌شود
-        """
-        # اطمینان از وجود پوشه
+        output_dir = os.path.join(self._get_subfolder_path('loss_matrices')) if not output_dir else output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-        # تعریف اقدامات و ستون‌ها
         actions = ['پذیرش', 'تصمیم تأخیری', 'رد']
         cols = ['نکول', 'عدم نکول']
         mat = pd.DataFrame(index=actions, columns=cols, dtype=float)
 
-        # پرکردن مقادیر ماتریس طبق جدول ۲
         mat.loc['پذیرش', 'نکول'] = 0
         mat.loc['پذیرش', 'عدم نکول'] = lam_pn
         mat.loc['رد', 'نکول'] = lam_np
@@ -183,15 +155,12 @@ class ResultManager:
         mat.loc['تصمیم تأخیری', 'نکول'] = u * lam_np
         mat.loc['تصمیم تأخیری', 'عدم نکول'] = v * lam_pn
 
-        # آماده‌سازی برای ذخیره‌سازی
         mat_to_save = mat.reset_index().rename(columns={'index': 'اقدام'})
         mat_to_save.insert(0, 'نمونه', sample_idx)
         filename = f'loss_matrix_fold_{fold}_sample_{sample_idx}.csv'
         filepath = os.path.join(output_dir, filename)
 
-        # ذخیره در CSV
         mat_to_save.to_csv(filepath, index=False, encoding='utf-8-sig')
         print(f'✅ ماتریس زیان نمونه {sample_idx} در فولد {fold} ذخیره شد: {filepath}')
 
         return mat
-

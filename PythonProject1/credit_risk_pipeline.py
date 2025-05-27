@@ -33,7 +33,8 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
+# DATA_FILE = r'C:\Users\nima\data\ln_loans_101000.xlsx'
+DATA_FILE = r'C:\Users\nima\data\101'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'
