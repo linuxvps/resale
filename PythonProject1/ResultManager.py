@@ -26,13 +26,17 @@ class ResultManager:
 
     def save_fold_summary(self, metrics, filename='fold_summary.csv'):
         m = np.array(metrics)
+        order = ['TP', 'TN', 'FP', 'FN', 'BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost']
+        metric_names = ['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost', 'TP', 'TN', 'FP', 'FN']
         rows = []
-        for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost'], m[:, :7].T):
-            rows.append({
-                'Metric': name,
-                'Mean': round(col.mean(), 4),
-                'Std': round(col.std(), 4)
-            })
+        for name in order:
+            if name in metric_names:
+                col = m[:, metric_names.index(name)]
+                rows.append({
+                    'Metric': name,
+                    'Mean': round(col.mean(), 4) if name not in ['TP', 'TN', 'FP', 'FN'] else int(round(col.mean())),
+                    'Std': round(col.std(), 4) if name not in ['TP', 'TN', 'FP', 'FN'] else int(round(col.std()))
+                })
         df = pd.DataFrame(rows)
         path = os.path.join(self._get_subfolder_path('summary'), filename)
         df.to_csv(path, index=False)

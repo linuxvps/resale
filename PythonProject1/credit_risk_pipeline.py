@@ -342,8 +342,16 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
 # ────────────────  خروجی نهایی جدول‌ها ────────────────
 m = np.array(metrics)
 print('\n—— 5-Fold Mean ± Std ——')
-for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost'], m[:, :7].T):
-    print(f'{name}: {col.mean():.4f} ± {col.std():.4f}')
+for name, col in zip(['BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost', 'TP', 'TN', 'FP', 'FN'], m[:, :11].T):
+    mean = col.mean()
+    std = col.std()
+    if name in ['TP', 'TN', 'FP', 'FN']:
+        print(f'{name}: {int(round(mean))} ± {int(round(std))}')
+    elif name == 'Cost':
+        print(f'{name}: {int(round(mean)):,} ± {int(round(std)):,}')
+    else:
+        print(f'{name}: {mean:.4f} ± {std:.4f}')
+
 ResultManager().save_fold_summary(metrics)
 
 
