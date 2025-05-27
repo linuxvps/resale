@@ -442,6 +442,7 @@ final_table = final_table[['Method', 'BAcc', 'AUC', 'FM', 'GM', 'Cost', 'TP', 'T
 # چاپ نهایی با رنگ آبی
 print('\n—— 📊 جدول مقایسه‌ای مدل‌ها ——')
 print('\033[94m' + final_table.to_string(index=False) + '\033[0m')
+ResultManager().save_comparison_table(final_table)
 
 # ۶) ذخیره فایل نهایی
 final_table.to_csv('results/comparison_table.csv', index=False)

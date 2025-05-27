@@ -24,6 +24,18 @@ class ResultManager:
         df.to_csv(path, index=False)
         print(f'💾 CSV saved → {path}')
 
+    def save_csv_to(self, df, filename, subfolder):
+        """ذخیره DataFrame در زیرپوشه مشخص"""
+        path = os.path.join(self._get_subfolder_path(subfolder), filename)
+        df.to_csv(path, index=False)
+        print(f'💾 CSV saved → {path}')
+
+    def save_comparison_table(self, final_table, filename='comparison_table.csv'):
+        """ذخیره جدول مقایسه‌ای مدل‌ها در پوشه‌ی مشخص comparison"""
+        path = os.path.join(self._get_subfolder_path('comparison'), filename)
+        final_table.to_csv(path, index=False)
+        print(f'📊 جدول مقایسه‌ای مدل‌ها ذخیره شد → {path}')
+
     def save_fold_summary(self, metrics, filename='fold_summary.csv'):
         m = np.array(metrics)
         order = ['TP', 'TN', 'FP', 'FN', 'BAcc', 'GM', 'FM', 'AUC', 'Precision', 'Recall', 'Cost']
