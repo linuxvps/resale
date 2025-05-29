@@ -192,3 +192,11 @@ class ResultManager:
         print(f'✅ ماتریس زیان نمونه {sample_idx} در فولد {fold} ذخیره شد: {filepath}')
 
         return mat
+
+    def save_nsga_sensitivity_csv(self, sens_df, filename='nsga_sensitivity.csv'):
+        """
+        ذخیره فایل تحلیل حساسیت NSGA-II به‌صورت CSV در پوشه sensitivity
+        """
+        path = os.path.join(self._get_subfolder_path('sensitivity'), filename)
+        sens_df.to_csv(path, index=False)
+        print(f'📄 NSGA-II sensitivity CSV saved → {path}')

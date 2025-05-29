@@ -33,7 +33,7 @@ pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی د�
 
 # ────────────────  پیکره‌بندی  ────────────────
 os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\Saeed_un.xlsx'
+DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
 # DATA_FILE = r'C:\Users\nima\data\ln_loans_30000.xlsx'
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
@@ -202,8 +202,7 @@ for pop, ngen in param_grid:
     print(f'Pop={pop:3}, Gen={ngen:3} → Cost={c:,.0f}, #BND={b}, time={t:.1f}s')
 
 sens_df = pd.DataFrame(sens_rows, columns=['PopSize', 'NGen', 'DecisionCost', 'NumBND', 'Seconds'])
-sens_df.to_csv('results/nsga_sensitivity.csv', index=False)
-
+ResultManager().save_nsga_sensitivity_csv(sens_df)
 # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
 ResultManager().plot_sensitivity(sens_df)
 # plooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooot
