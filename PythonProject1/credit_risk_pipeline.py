@@ -32,9 +32,8 @@ pd.set_option('display.width', 200)  # تنظیم عرض کنسول (می‌تو
 pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی دلخواه
 
 # ────────────────  پیکره‌بندی  ────────────────
-os.environ['LOKY_MAX_CPU_COUNT'] = '8'
-DATA_FILE = r'C:\Users\nima\data\ln_loans_1000.xlsx'
-# DATA_FILE = r'C:\Users\nima\data\ln_loans_30000.xlsx'
+os.environ['LOKY_MAX_CPU_COUNT'] = '2'
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Saeed_un.xlsx')
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
 INTEREST_RATE_COL = 'CURRENT_LOAN_RATES'

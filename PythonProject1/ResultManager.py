@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib import cm
 import seaborn as sns
 
-BASE_SAVE_PATH = r'C:\Users\nima\Desktop\payanName\resale\PythonProject1\results'
+BASE_SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
 
 class ResultManager:
     def __init__(self, output_dir='results'):
