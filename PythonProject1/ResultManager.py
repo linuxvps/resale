@@ -166,10 +166,10 @@ class ResultManager:
         plt.savefig(os.path.join(self._get_subfolder_path('distribution'), f'prob_dist_fold_{fold}.png'), dpi=300)
         plt.show()
 
-    def build_and_save_loss_matrix(self,lam_np, lam_pn, u, v,
+    def build_and_save_loss_matrix(self, lam_np, lam_pn, u, v,
                                    sample_idx, fold,
-                                   output_dir='results'):
-        output_dir = os.path.join(self._get_subfolder_path('loss_matrices')) if not output_dir else output_dir
+                                   output_dir='results/loss-matrix'):
+        output_dir = os.path.abspath(output_dir or self._get_subfolder_path('loss_matrices'))
         os.makedirs(output_dir, exist_ok=True)
 
         actions = ['پذیرش', 'تصمیم تأخیری', 'رد']
