@@ -30,9 +30,9 @@ pd.set_option('display.max_columns', None)  # نمایش همه ستون‌ها
 pd.set_option('display.expand_frame_repr', False)  # جلوگیری از شکستن به چند خط
 pd.set_option('display.width', 200)  # تنظیم عرض کنسول (می‌تونی عدد رو بیشتر هم بذاری)
 pd.set_option('display.float_format', '{:,.6f}'.format)  # فرمت عددی دلخواه
-
+# PYTHONUNBUFFERED=1;OMP_NUM_THREADS=2;MKL_NUM_THREADS=2
 # ────────────────  پیکره‌بندی  ────────────────
-os.environ['LOKY_MAX_CPU_COUNT'] = '2'
+os.environ['LOKY_MAX_CPU_COUNT'] = '8'
 DATA_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'Saeed_un.xlsx')
 TARGET_COL = 'FILE_STATUS_TITLE2'
 LOAN_AMT_COL = 'LOAN_AMOUNT'
@@ -163,7 +163,7 @@ raw[raw_num_filt.columns] = raw_num_filt
 raw['interest_cash'] = yearly_interest(raw[LOAN_AMT_COL], raw[INTEREST_RATE_COL], years)
 
 df = preprocess(raw.drop(columns=[TARGET_COL]))
-X_full = df.drop(columns=['label', 'interest_cash', LOAN_AMT_COL])
+X_full = df.drop(columns=['label'])
 y_full = df['label']
 
 
