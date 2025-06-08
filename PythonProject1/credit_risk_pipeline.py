@@ -208,7 +208,12 @@ ResultManager().plot_sensitivity(sens_df)
 
 # ────────────────  تعریف استکینگ مشترک ────────────────
 base = [('rf'  ,  RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE)),
-        ('xgb' ,  XGBClassifier(n_estimators=300, random_state=RANDOM_STATE, eval_metric='logloss')),
+        ('xgb' ,
+
+         XGBClassifier(n_estimators=300, random_state=RANDOM_STATE,
+                       eval_metric='logloss', tree_method='hist', device='cuda'))
+
+         ,
         ('gbdt',  GradientBoostingClassifier(random_state=RANDOM_STATE)),
         ('ert' ,  ExtraTreesClassifier(n_estimators=200, random_state=RANDOM_STATE)),
         ('ada' ,  AdaBoostClassifier(algorithm='SAMME', random_state=RANDOM_STATE))]
@@ -366,7 +371,10 @@ print('Feature-importance table → top20_feature_importance.csv')
 # ────────────────  Baseline single-stage models ────────────────
 baseline_models = {
     'RandomForest': RandomForestClassifier(n_estimators=300, random_state=RANDOM_STATE),
-    'XGBoost': XGBClassifier(n_estimators=400, random_state=RANDOM_STATE, eval_metric='logloss'),
+    'XGBoost':
+        XGBClassifier(n_estimators=400, random_state=RANDOM_STATE,
+                      eval_metric='logloss', tree_method='hist', device='cuda')
+    ,
     'SVM-RBF': (lambda: __import__('sklearn.svm', fromlist=['SVC'])
                 .SVC(probability=True, kernel='rbf', C=2, gamma='scale', random_state=RANDOM_STATE))(),
     'Bagging': BaggingClassifier(
@@ -387,6 +395,7 @@ for fold, (tr_idx, te_idx) in enumerate(kf.split(X_full, y_full), 1):
     lam_NP = (raw.loc[te_idx, LOAN_AMT_COL] + raw.loc[te_idx, 'interest_cash']).values
     lam_PN = raw.loc[te_idx, 'interest_cash'].values
     for name, clf in baseline_models.items():
+        print(f'Fold {fold}:::::::::::::  ')
         clf.fit(X_tr, y_tr)
         prob = clf.predict_proba(X_te)[:, 1]
         pred = (prob >= 0.5).astype(int)
